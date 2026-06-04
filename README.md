@@ -4,26 +4,11 @@
 
 **Hold the Command (⌘) key on the right side of your keyboard to summon one chosen app — hold it again to drop back to whatever you were doing.**
 
-Trapdoor isn't another app switcher, launcher, or palette. It doesn't try to replace ⌘-Tab, Mission Control, or Spotlight, and it doesn't pile on the features that tools like Raycast, Alfred, LaunchBar, rcmd, or Monarch already do well. It does exactly one thing: a single, dedicated key for the *one* app you reach for constantly.
+Trapdoor isn't another app switcher, launcher, or palette. It doesn't try to replace ⌘-Tab, Mission Control, or Spotlight, and it doesn't pile on the features that tools like Spotlight, Raycast, Alfred, LaunchBar, rcmd, or Monarch already do well. It does exactly one thing: a single, dedicated key for the *one* app you reach for constantly.
 
-There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, and no chords. You pick the app once; after that it's pure muscle memory — like a push-to-talk button for your terminal, notes, or chat. It claims the otherwise-dead *gesture* of holding the right ⌘ key, so quick taps and normal right-⌘ shortcuts keep working exactly as before — you give up nothing.
+There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, and no chords. You pick the app once; after that it's pure muscle memory — like a push-to-talk button for your terminal, notes, browser, or chat. It claims the otherwise-dead *gesture* of holding the right ⌘ key, so quick taps and normal right-⌘ shortcuts keep working exactly as before — you give up nothing.
 
-It's easy, fast, tiny (2.4MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter, just one reflex that's always there.
-
-
-## Usage Examples
-
-Pick the one app you're *always* dropping into and back out of, bind it with Trapdoor, and forget the keyboard gymnastics.
-
-**Developer** — bind the terminal of your choice (Terminal.app, Warp, Ghostty, iTerm). It's one key away from anywhere: `brew install` something mid-task, check a deploy script, fire off a quick `git` command — then one key back to what you were doing. And it's the **full app**, with all its tabs and sessions, not a stripped-down dropdown drawer, global hotkey window, or limited notch gimmick.
-
-**Researcher** — bind your browser (Safari, Chrome, Arc). Reading a doc or writing something and need to look a thing up? One tap brings the real browsing session forward, one tap returns to the work — no new window, no "search the web" box.
-
-**Note Taker** — bind your favorite notes app (Notes, Obsidian, Bear). A thought worth capturing never means hunting for the right window: one tap to the notebook, jot it down, one tap back. The capture friction basically disappears.
-
-**Manager** — bind your inbox or chat client (Mail, Messages, Slack). Glance at a message and reply, then drop straight back into focus — without getting sucked in and losing the thread of deeper work.
-
-However you choose to use it the pattern is always the same: **summon → do the thing → dismiss**, without ever breaking stride or leaving your hands wondering which shortcut to press.
+It's easy, fast, tiny (2.4MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
 
 ## Download
 
@@ -42,6 +27,20 @@ However you choose to use it the pattern is always the same: **summon → do the
 - Adjustable **hold duration** (0–0.6s) so a normal press of right-⌘ is never hijacked.
 - Correctly returns you to the previous app — including full-screen apps and apps with no open windows.
 - Runs silently as a background agent (no Dock icon, no menu bar), and starts at login.
+
+## Usage Examples
+
+Pick the one app you're *always* dropping into and back out of, bind it with Trapdoor, and forget the keyboard gymnastics.
+
+- **Developer** — choose the terminal of your choice (Terminal.app, Warp, Ghostty, iTerm). It's one key away from anywhere: `brew install` something mid-task, check a deploy script, fire off a quick `git` command — then one key back to what you were doing. And it's the **full app**, with all its tabs and sessions, not a stripped-down dropdown drawer, global hotkey window, or limited notch gimmick.
+
+- **Researcher** — choose your browser (Safari, Chrome, Arc). Reading a doc or writing something and need to look a thing up? One tap brings the real browsing session forward, one tap returns to the work — no new window, no "search the web" box.
+
+- **Note Taker** — choose your favorite notes app (Notes, Obsidian, Bear). A thought worth capturing never means hunting for the right window: one tap to the notebook, jot it down, one tap back. The capture friction basically disappears.
+
+- **Manager** — choose your email or chat client (Mail, Messages, Slack). Glance at a message and reply, then drop straight back into focus — without getting sucked in and losing the thread of deeper work.
+
+Whatever app you choose to assign as your **Trapdoor** the pattern is always the same: **summon → do the thing → dismiss**, without ever breaking stride or leaving your hands wondering which shortcut to press.
 
 ## Requirements
 
