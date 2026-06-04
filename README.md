@@ -12,7 +12,7 @@ It's easy, fast, tiny (2.4MB), uses almost zero system resources, and stays out 
 
 ## In practice
 
-Pick the one app you're *always* dipping into and back out of, bind it, and forget the keyboard gymnastics.
+Pick the one app you're *always* dropping into and back out of, bind it with Trapdoor, and forget the keyboard gymnastics.
 
 **The terminal jockey.** I'm in and out of the terminal all day — Terminal.app, Warp, Ghostty, whatever. I bind my favorite to the right ⌘ key, and now it's everywhere I am, no matter what I'm doing. Need to `brew install` something mid-task? Check on a deploy script? Run a quick `git` command? One key brings the real terminal forward, one key drops me right back where I was. And it's the **full app** — your actual terminal with all your tabs and sessions — not a stripped-down dropdown drawer, a global hotkey window, or some notch gimmick.
 
