@@ -10,6 +10,8 @@ It repurposes the otherwise-unused *gesture* of holding the right Command key â€
 
 > This link always points to the most recent release build.
 
+![Trapdoor settings window](screenshots/settings.png)
+
 ## Features
 
 - Hold right-âŒ˜ to toggle a single chosen app in and out of focus.
