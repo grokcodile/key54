@@ -23,9 +23,33 @@ It repurposes the otherwise-unused *gesture* of holding the right Command key �
 bash install.sh
 ```
 
-This compiles `main.swift`, generates the app icon from `trapdoor art 2.png`, ad-hoc code-signs, installs to `/Applications/Trapdoor.app`, and launches it. On first run, grant Accessibility permission when prompted.
+This compiles `main.swift`, generates the app icon from `trapdoor_icon.png`, ad-hoc code-signs, installs to `/Applications/Trapdoor.app`, and launches it. On first run, grant Accessibility permission when prompted.
 
 > Optional: install [`pngquant`](https://pngquant.org) to shrink the generated icon.
+
+## Releases
+
+Pushing a version tag (e.g. `v1.0`) triggers the GitHub Actions release workflow
+(`.github/workflows/release.yml`), which builds the app, packages a `.dmg`, and
+attaches it to a GitHub Release.
+
+```sh
+git tag v1.0
+git push origin v1.0
+```
+
+By default the `.dmg` is ad-hoc signed (other Macs will show a Gatekeeper
+warning). To produce a signed + notarized build, add these repository secrets
+(Settings → Secrets and variables → Actions) — the workflow detects them
+automatically:
+
+| Secret | Purpose |
+| --- | --- |
+| `MACOS_CERT_P12_BASE64` | Base64 of your exported **Developer ID Application** cert (`.p12`) |
+| `MACOS_CERT_PASSWORD` | Password for that `.p12` |
+| `AC_API_KEY_ID` | App Store Connect API **Key ID** |
+| `AC_API_ISSUER_ID` | App Store Connect API **Issuer ID** |
+| `AC_API_KEY_BASE64` | Base64 of the `AuthKey_XXXX.p8` |
 
 ## How it works
 

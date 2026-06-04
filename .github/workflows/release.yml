@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      # These flip on automatically once the corresponding repo secrets exist.
+      HAS_SIGNING: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
+      HAS_NOTARY: ${{ secrets.AC_API_KEY_ID != '' && secrets.AC_API_ISSUER_ID != '' && secrets.AC_API_KEY_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pngquant
+        run: brew install pngquant || true
+
+      - name: Import Developer ID certificate
+        if: env.HAS_SIGNING == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/app.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN" >/dev/null
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
+          echo "Using identity: $IDENTITY"
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: bash build.sh
+
+      - name: Package DMG
+        run: |
+          mkdir -p dist/dmgroot
+          cp -R "build/Trapdoor.app" dist/dmgroot/
+          ln -s /Applications dist/dmgroot/Applications
+          hdiutil create -volname "Trapdoor" -srcfolder dist/dmgroot \
+            -ov -format UDZO "dist/Trapdoor.dmg"
+
+      - name: Notarize & staple
+        if: env.HAS_NOTARY == 'true'
+        env:
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+          AC_API_KEY_BASE64: ${{ secrets.AC_API_KEY_BASE64 }}
+        run: |
+          echo "$AC_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/key.p8"
+          xcrun notarytool submit "dist/Trapdoor.dmg" \
+            --key "$RUNNER_TEMP/key.p8" \
+            --key-id "$AC_API_KEY_ID" \
+            --issuer "$AC_API_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "dist/Trapdoor.dmg"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Trapdoor.dmg
+          generate_release_notes: true
