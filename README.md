@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="screenshots/icon_readme.png" width="128" alt="Trapdoor icon">
-</p>
+<img src="screenshots/icon_readme.png" width="128" alt="Trapdoor icon">
 
 # Trapdoor
 
