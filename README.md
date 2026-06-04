@@ -2,9 +2,13 @@
 
 # Trapdoor
 
-A tiny macOS utility: **hold the Command (⌘) key on the right side of your keyboard to summon a chosen application. Hold it again to dismiss it and return to what you were doing.**
+**Hold the Command (⌘) key on the right side of your keyboard to summon one chosen app — hold it again to drop back to whatever you were doing.**
 
-It repurposes the otherwise-unused *gesture* of holding the right Command key — quick taps and normal right-⌘ keyboard shortcuts still work as usual, so you don't lose the modifier. Pick one app you bounce to constantly (a terminal, notes, chat, etc.) and it becomes a single-key reflex, like a push-to-talk button for that app.
+Trapdoor isn't another app switcher, launcher, or palette. It doesn't try to replace ⌘-Tab, Mission Control, or Spotlight, and it doesn't pile on the features that tools like Raycast, Alfred, LaunchBar, rcmd, or Monarch already do well. It does exactly one thing: a single, dedicated key for the *one* app you reach for constantly.
+
+There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, and no chords. You pick the app once; after that it's pure muscle memory — like a push-to-talk button for your terminal, notes, or chat. It claims the otherwise-dead *gesture* of holding the right ⌘ key, so quick taps and normal right-⌘ shortcuts keep working exactly as before — you give up nothing.
+
+It's tiny, instant, and stays out of the way: no Dock icon, no menu bar clutter, just one reflex that's always there.
 
 ## Download
 
