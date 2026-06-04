@@ -4,6 +4,12 @@ A tiny macOS utility: **hold the Command (⌘) key on the right side of your key
 
 It repurposes the otherwise-unused *gesture* of holding the right Command key — quick taps and normal right-⌘ keyboard shortcuts still work as usual, so you don't lose the modifier. Pick one app you bounce to constantly (a terminal, notes, chat, etc.) and it becomes a single-key reflex, like a push-to-talk button for that app.
 
+## Download
+
+**[⬇︎ Download the latest Trapdoor.dmg](https://github.com/grokcodile/trapdoor/releases/latest/download/Trapdoor.dmg)** — or see [all releases](https://github.com/grokcodile/trapdoor/releases/latest).
+
+> This link always points to the most recent release build.
+
 ## Features
 
 - Hold right-⌘ to toggle a single chosen app in and out of focus.
@@ -61,4 +67,4 @@ This app uses a global event tap and controls other applications, which is incom
 
 ## License
 
-Personal project.
+Released under the [MIT License](LICENSE).

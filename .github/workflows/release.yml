@@ -12,6 +12,8 @@ jobs:
   build:
     runs-on: macos-14
     env:
+      # Run JS actions on Node 24 (silences the Node 20 deprecation warning).
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       # These flip on automatically once the corresponding repo secrets exist.
       HAS_SIGNING: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
       HAS_NOTARY: ${{ secrets.AC_API_KEY_ID != '' && secrets.AC_API_ISSUER_ID != '' && secrets.AC_API_KEY_BASE64 != '' }}
