@@ -8,7 +8,7 @@ It repurposes the otherwise-unused *gesture* of holding the right Command key �
 
 ## Download
 
-**[⬇︎ Download the latest Trapdoor.dmg](https://github.com/grokcodile/trapdoor/releases/latest/download/Trapdoor.dmg)** — or see [all releases](https://github.com/grokcodile/trapdoor/releases/latest).
+**[Download the latest Trapdoor.dmg](https://github.com/grokcodile/trapdoor/releases/latest/download/Trapdoor.dmg)** — or see [all releases](https://github.com/grokcodile/trapdoor/releases/latest).
 
 > This link always points to the most recent release build.
 
