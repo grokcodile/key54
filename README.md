@@ -10,6 +10,8 @@ It repurposes the otherwise-unused *gesture* of holding the right Command key â€
 
 > This link always points to the most recent release build.
 
+## Screenshot
+
 ![Trapdoor settings window](screenshots/settings.png)
 
 ## Features
@@ -25,7 +27,7 @@ It repurposes the otherwise-unused *gesture* of holding the right Command key â€
 - macOS 13 or later.
 - **Accessibility permission** (System Settings â†’ Privacy & Security â†’ Accessibility) so it can detect the right Command key.
 
-## Build & install
+## Build
 
 ```sh
 bash install.sh
