@@ -8,7 +8,7 @@ Trapdoor isn't another app switcher, launcher, or palette. It doesn't try to rep
 
 There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, and no chords. You pick the app once; after that it's pure muscle memory — like a push-to-talk button for your terminal, notes, or chat. It claims the otherwise-dead *gesture* of holding the right ⌘ key, so quick taps and normal right-⌘ shortcuts keep working exactly as before — you give up nothing.
 
-It's tiny (2.4 MB), fast, uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter, just one reflex that's always there.
+It's easy, fast, tiny (2.4MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter, just one reflex that's always there.
 
 ## Download
 
