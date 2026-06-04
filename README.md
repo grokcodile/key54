@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="screenshots/icon_readme.png" width="128" alt="Trapdoor icon">
+</p>
+
 # Trapdoor
 
 A tiny macOS utility: **hold the Command (⌘) key on the right side of your keyboard to summon a chosen application. Hold it again to dismiss it and return to what you were doing.**
