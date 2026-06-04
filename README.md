@@ -10,6 +10,18 @@ There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, an
 
 It's easy, fast, tiny (2.4MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter, just one reflex that's always there.
 
+## In practice
+
+Pick the one app you're *always* dipping into and back out of, bind it, and forget the keyboard gymnastics.
+
+**The terminal jockey.** I'm in and out of the terminal all day — Terminal.app, Warp, Ghostty, whatever. I bind my favorite to the right ⌘ key, and now it's everywhere I am, no matter what I'm doing. Need to `brew install` something mid-task? Check on a deploy script? Run a quick `git` command? One key brings the real terminal forward, one key drops me right back where I was. And it's the **full app** — your actual terminal with all your tabs and sessions — not a stripped-down dropdown drawer, a global hotkey window, or some notch gimmick.
+
+**The researcher.** Live in your browser? Bind Safari (or Chrome, Arc, …). Reading a doc, writing an email, deep in some app — tap and your browser is front and center to look something up; tap again and you're back to the doc, exactly where you left off. No new window, no "search the web" box — your real browsing session, instantly.
+
+**Anything you bounce off of.** Notes for jotting. Messages or Slack for a quick reply. A music app to skip a track. Whatever app interrupts your flow the most often is the one that benefits most from being a single, thoughtless keypress away — and just as quick to banish.
+
+The pattern is always the same: **summon → do the thing → dismiss**, without ever breaking stride or leaving your hands wondering which shortcut to press.
+
 ## Download
 
 **[Download the latest Trapdoor.dmg](https://github.com/grokcodile/trapdoor/releases/latest/download/Trapdoor.dmg)** — or see [all releases](https://github.com/grokcodile/trapdoor/releases/latest).
