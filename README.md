@@ -18,9 +18,9 @@ It's fast, tiny (2.4 MB), uses almost zero system resources, and stays out of th
 
 **Download the latest [Trapdoor.dmg](https://github.com/grokcodile/trapdoor/releases/latest/download/Trapdoor.dmg) — or see [all releases](https://github.com/grokcodile/trapdoor/releases/latest).** *This link always points to the most recent release build.*
 
-<a href='https://ko-fi.com/K8H520TPVK' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
-
 Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
+
+<a href='https://ko-fi.com/K8H520TPVK' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
 > **Apple Silicon only.** The released build is arm64; it won't run on Intel Macs. Intel users can [build from source](#build).
 >
