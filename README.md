@@ -20,8 +20,6 @@ It's fast, tiny (2.4 MB), uses almost zero system resources, and stays out of th
 
 Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
 
-<a href='https://ko-fi.com/K8H520TPVK' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
-
 > **Apple Silicon only.** The released build is arm64; it won't run on Intel Macs. Intel users can [build from source](#build).
 >
 > **First launch:** the build isn't notarized yet, so macOS will say it's from an unidentified developer. Right-click (or Control-click) **Trapdoor → Open**, then confirm — you only need to do this once.
