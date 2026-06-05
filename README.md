@@ -10,29 +10,17 @@ There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, an
 
 It's fast, tiny (2.4 MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
 
+![Trapdoor settings window](screenshots/settings.png)
+
 ## Download
 
-**[Download the latest Trapdoor.dmg](https://github.com/grokcodile/trapdoor/releases/latest/download/Trapdoor.dmg)** — or see [all releases](https://github.com/grokcodile/trapdoor/releases/latest). This link always points to the most recent release build.
+**Download the latest [Trapdoor.dmg](https://github.com/grokcodile/trapdoor/releases/latest/download/Trapdoor.dmg) — or see [all releases](https://github.com/grokcodile/trapdoor/releases/latest).** *This link always points to the most recent release build.*
 
 Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
 
 > **Apple Silicon only.** The released build is arm64; it won't run on Intel Macs. Intel users can [build from source](#build).
 >
 > **First launch:** the build isn't notarized yet, so macOS will say it's from an unidentified developer. Right-click (or Control-click) **Trapdoor → Open**, then confirm — you only need to do this once.
-
-## First run
-
-1. Launch **Trapdoor** from `Applications`. Its window opens.
-2. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
-3. Optionally adjust the **Hold Duration** (how long you hold the key before it triggers).
-4. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Trapdoor. This lets it detect the right Command key.
-5. Click **Done**. Trapdoor keeps running in the background (and starts automatically at login).
-
-To change the app or settings later, just open Trapdoor again from `Applications`.
-
-## Screenshot
-
-![Trapdoor settings window](screenshots/settings.png)
 
 ## Features
 
@@ -71,6 +59,17 @@ bash install.sh
 This compiles `main.swift`, generates the app icon from `trapdoor_icon.png`, ad-hoc code-signs, installs to `/Applications/Trapdoor.app`, and launches it. On first run, grant Accessibility permission when prompted.
 
 > Optional: install [`pngquant`](https://pngquant.org) to shrink the generated icon.
+
+## First run
+
+1. Launch **Trapdoor** from `Applications`. Its window opens.
+2. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Trapdoor. This lets it detect the right Command key.
+3. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
+4. Optionally adjust the **Hold Duration** (how long you hold the key before it triggers).
+5. Click **Done**. Trapdoor keeps running in the background (and starts automatically at login).
+
+To change the app or settings later, just open Trapdoor again from `Applications`.
+
 
 ## Uninstall
 
