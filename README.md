@@ -111,6 +111,13 @@ Trapdoor installs a `CGEventTap` that watches `flagsChanged` events for the righ
 
 This app uses a global event tap and controls other applications, which is incompatible with the Mac App Store sandbox — it's distributed directly (Developer ID + notarization, or built from source).
 
+## Support
+
+Trapdoor is free and open source. If it's earned a spot in your muscle memory, you can support its development:
+
+- ❤️ [GitHub Sponsors](https://github.com/sponsors/grokcodile)
+- ☕ [Ko-fi](https://ko-fi.com/grokcodile)
+
 ## License
 
 Released under the [MIT License](LICENSE).
