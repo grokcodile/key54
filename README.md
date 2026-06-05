@@ -118,6 +118,7 @@ This app uses a global event tap and controls other applications, which is incom
 Trapdoor is free and open source. If it makes your work a little better, you can support its development:
 
 - ❤️ [GitHub Sponsors](https://github.com/sponsors/grokcodile)
+- ☕ [Ko-fi](https://ko-fi.com/grokcodile)
 
 ## License
 
