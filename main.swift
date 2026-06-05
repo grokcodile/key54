@@ -271,7 +271,7 @@ class SettingsWindow: NSWindow {
         let descH: CGFloat = 92
         let chooseH: CGFloat = 32
         let sliderBlockH: CGFloat = 64  // caption + slider + tick labels
-        let bottomBarH: CGFloat = 60    // Quit / Done row + bottom margin
+        let bottomBarH: CGFloat = 86    // Quit / Done row + coffee link + bottom margin
         let g: CGFloat = 16             // generic gap
 
         // App-selection box (icon + name + change button) metrics
@@ -431,16 +431,39 @@ class SettingsWindow: NSWindow {
 
         // Bottom bar: Quit (secondary, left) + Done (primary, right)
         let btnW: CGFloat = 100
+        let barY: CGFloat = 46
         let quitBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
-        quitBtn.frame = NSRect(x: pad, y: 24, width: btnW, height: 32)
+        quitBtn.frame = NSRect(x: pad, y: barY, width: btnW, height: 32)
         quitBtn.bezelStyle = .rounded
         c.addSubview(quitBtn)
 
         let doneBtn = NSButton(title: "Done", target: self, action: #selector(saveAndClose))
-        doneBtn.frame = NSRect(x: contentW - pad - btnW, y: 24, width: btnW, height: 32)
+        doneBtn.frame = NSRect(x: contentW - pad - btnW, y: barY, width: btnW, height: 32)
         doneBtn.bezelStyle = .rounded
         doneBtn.keyEquivalent = "\r"
         c.addSubview(doneBtn)
+
+        // "Buy me a coffee" link, centered below the buttons
+        let coffeeBtn = NSButton(title: "", target: self, action: #selector(openCoffee))
+        coffeeBtn.isBordered = false
+        let coffeeTitle = "☕ Buy me a coffee" as NSString
+        let coffeeAttr = NSMutableAttributedString(string: coffeeTitle as String)
+        coffeeAttr.addAttributes([
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize - 1),
+        ], range: NSRange(location: 0, length: coffeeTitle.length))
+        // Underline only the words, not the emoji.
+        let textStart = coffeeTitle.range(of: "Buy").location
+        if textStart != NSNotFound {
+            coffeeAttr.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue,
+                                    range: NSRange(location: textStart, length: coffeeTitle.length - textStart))
+        }
+        coffeeBtn.attributedTitle = coffeeAttr
+        coffeeBtn.sizeToFit()
+        coffeeBtn.frame = NSRect(x: (contentW - coffeeBtn.frame.width) / 2, y: 16,
+                                 width: coffeeBtn.frame.width, height: 20)
+        coffeeBtn.toolTip = "Support Trapdoor on Ko-fi"
+        c.addSubview(coffeeBtn)
 
         contentView = c
         updateAppDisplay()
@@ -490,6 +513,10 @@ class SettingsWindow: NSWindow {
         NSWorkspace.shared.open(
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         )
+    }
+
+    @objc private func openCoffee() {
+        NSWorkspace.shared.open(URL(string: "https://ko-fi.com/grokcodile")!)
     }
 }
 
