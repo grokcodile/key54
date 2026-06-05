@@ -113,7 +113,7 @@ This app uses a global event tap and controls other applications, which is incom
 
 ## Support
 
-Trapdoor is free and open source. If it's earned a spot in your muscle memory, you can support its development:
+Trapdoor is free and open source. If it makes your work a little better, you can support its development:
 
 - ❤️ [GitHub Sponsors](https://github.com/sponsors/grokcodile)
 - ☕ [Ko-fi](https://ko-fi.com/grokcodile)
