@@ -22,7 +22,13 @@ Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
 
 > **Apple Silicon only.** The released build is arm64; it won't run on Intel Macs. Intel users can [build from source](#build).
 >
-> **First launch:** the build isn't notarized yet, so macOS will say it's from an unidentified developer. Right-click (or Control-click) **Trapdoor → Open**, then confirm — you only need to do this once.
+> **First launch:** the build isn't notarized yet, so macOS will warn that it's from an unidentified developer. You only need to clear this once, in any of these ways:
+>
+> - **macOS 13–14:** right-click (or Control-click) **Trapdoor → Open**, then click **Open** in the dialog.
+> - **macOS 15 (Sequoia) and later:** double-click it (it gets blocked), then go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**.
+> - **Terminal (any version):** `xattr -dr com.apple.quarantine /Applications/Trapdoor.app`
+>
+> Prefer no warning at all? [Build from source](#build) — a locally built app isn't quarantined and just runs.
 
 ## Features
 
