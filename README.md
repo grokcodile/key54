@@ -10,6 +10,8 @@ There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, an
 
 It's fast, tiny (2.4 MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
 
+## Screenshot
+
 ![Trapdoor settings window](screenshots/settings.png)
 
 ## Download
