@@ -2,7 +2,7 @@
 
 # Trapdoor
 
-**Hold the Command (⌘) key on the right side of your keyboard to summon one chosen app — hold it again to drop back to whatever you were doing.**
+**Hold the Command (⌘) key on the right side of your keyboard to summon one chosen app — hold it again to switch back to whatever you were doing.**
 
 Trapdoor isn't another app switcher, launcher, or palette. It doesn't try to replace ⌘-Tab, Mission Control, or Spotlight, and it doesn't pile on the features that tools like Raycast, Alfred, LaunchBar, rcmd, or Monarch already do well. It does exactly one thing: a single, dedicated key for the *one* app you reach for constantly.
 
