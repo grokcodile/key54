@@ -12,7 +12,7 @@ It's fast, tiny (2.4 MB), uses almost zero system resources, and stays out of th
 
 ## Screenshot
 
-![Trapdoor settings window](screenshots/settings.png)
+![Trapdoor settings window](screenshots/settings.png?v=2)
 
 ## Download
 
