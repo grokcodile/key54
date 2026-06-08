@@ -13,6 +13,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var cachedURL: URL?
     private var cachedBundleID: String?
 
+    // Trigger animation HUD + preference.
+    private lazy var hud = TriggerHUD()
+    private var bufferTimer: Timer?
+    private var hudVisible = false
+    var showAnimation: Bool {
+        get { UserDefaults.standard.object(forKey: "showAnimation") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "showAnimation") }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
@@ -151,9 +160,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Event tap
 
     private var holdTimer: Timer?
-    var holdDuration: TimeInterval {
-        get { UserDefaults.standard.object(forKey: "holdDuration") as? TimeInterval ?? 0.3 }
-        set { UserDefaults.standard.set(newValue, forKey: "holdDuration") }
+    /// Which preset is active (0 = Instant … 3 = Long).
+    var selectedPreset: Int {
+        get { max(0, min(3, UserDefaults.standard.object(forKey: "presetIndex") as? Int ?? 1)) }
+        set { UserDefaults.standard.set(newValue, forKey: "presetIndex") }
     }
 
     private func startEventTap() {
@@ -206,16 +216,72 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func scheduleToggle() {
-        guard holdTimer == nil else { return }
-        holdTimer = Timer.scheduledTimer(withTimeInterval: holdDuration, repeats: false) { [weak self] _ in
-            self?.holdTimer = nil
-            self?.toggleApp()
+        guard bufferTimer == nil, holdTimer == nil else { return }
+        // Per-preset dead-zone buffer. Only if right-⌘ is still held past it do
+        // we engage and start the charge countdown, so a quick tap or chord
+        // isn't hijacked. (Instant's buffer is 0 — it triggers immediately.)
+        let buffer = SettingsWindow.bufferValues[selectedPreset]
+        bufferTimer = Timer.scheduledTimer(withTimeInterval: buffer, repeats: false) { [weak self] _ in
+            self?.bufferTimer = nil
+            self?.arm()
+        }
+    }
+
+    /// Engaged after the buffer: show the ring's charge sweep, then fire + toggle.
+    private func arm() {
+        let stop = selectedPreset
+        let charge = SettingsWindow.durationValues[stop]
+        let fade = SettingsWindow.fadeConstant
+        let swell = SettingsWindow.swellConstant
+
+        // Preview mode: only while the settings window is actually the key
+        // window. Play the full animation with Trapdoor's own icon but DON'T
+        // switch apps — so you can feel each preset while tuning. Gating on
+        // isKeyWindow (not just "Trapdoor is frontmost") means clicking Done,
+        // which hides the window, immediately stops previewing.
+        let preview = settingsWindow?.isKeyWindow == true
+
+        if showAnimation {
+            let icon: NSImage?
+            if preview {
+                icon = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+            } else {
+                // Show the icon of the app we'll end up in — the previous app if
+                // we're dismissing the target, otherwise the target itself.
+                let dismissing = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == resolvedBundleID()
+                icon = dismissing
+                    ? (previousApp?.icon ?? NSWorkspace.shared.icon(forFile: "/System/Library/CoreServices/Finder.app"))
+                    : NSWorkspace.shared.icon(forFile: targetAppURL().path)
+            }
+            hudVisible = true
+            hud.begin(fill: charge, icon: icon, preview: preview)
+        }
+
+        holdTimer = Timer.scheduledTimer(withTimeInterval: charge, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.holdTimer = nil
+            guard self.hudVisible else { if !preview { self.toggleApp() }; return }
+            self.hudVisible = false
+
+            // Always dissolve the HUD fully *in place first*, then switch —
+            // full-screen and normal toggles behave identically. Letting the
+            // fade order the panel out before the toggle means the HUD is gone
+            // before any full-screen slide snapshots the outgoing Space, so the
+            // "ghost ring" can never reappear; normal toggles get the same
+            // unhurried feel for free. The brief extra beat lets the window
+            // server composite the removal before the transition begins.
+            self.hud.fire(fade: fade, swellTo: swell)
+            DispatchQueue.main.asyncAfter(deadline: .now() + fade + 0.05) {
+                self.hud.hideNow()
+                if !preview { self.toggleApp() }
+            }
         }
     }
 
     func cancelToggle() {
-        holdTimer?.invalidate()
-        holdTimer = nil
+        bufferTimer?.invalidate(); bufferTimer = nil
+        holdTimer?.invalidate(); holdTimer = nil
+        if hudVisible { hud.cancel(); hudVisible = false }
     }
 
     @objc private func axPermissionChanged() {
@@ -236,6 +302,15 @@ class SettingsWindow: NSWindow {
     private let pad: CGFloat = 32
     private let bannerH: CGFloat = 84
     private let bannerGap: CGFloat = 16
+
+    // Hold-duration presets. Each stop has its own dead-zone buffer and charge
+    // sweep (how long the ring fills); the dissolve and swell are constant. The
+    // full trigger time is buffer + charge.
+    static let durationLabels = ["Instant", "Short", "Medium", "Long"]
+    static let bufferValues:   [TimeInterval] = [0.0, 0.3, 0.4, 0.5]   // pre-buffer dead-zone
+    static let durationValues: [TimeInterval] = [0.0, 0.4, 0.6, 0.8]   // charge sweep
+    static let fadeConstant: TimeInterval = 0.4                        // dissolve
+    static let swellConstant: CGFloat = 1.6                            // ring expansion
 
     init(delegate: AppDelegate) {
         self.appDelegate = delegate
@@ -270,7 +345,7 @@ class SettingsWindow: NSWindow {
         let titleH: CGFloat = 36
         let descH: CGFloat = 92
         let chooseH: CGFloat = 32
-        let sliderBlockH: CGFloat = 64  // caption + slider + tick labels
+        let sliderBlockH: CGFloat = 84  // caption + hint + slider + tick labels
         let bottomBarH: CGFloat = 86    // Quit / Done row + coffee link + bottom margin
         let g: CGFloat = 16             // generic gap
 
@@ -390,42 +465,49 @@ class SettingsWindow: NSWindow {
         chooseBtn.frame = NSRect(x: boxX + (boxW - chooseW) / 2, y: y + boxPadV, width: chooseW, height: chooseH)
         c.addSubview(chooseBtn)
 
-        // Hold-duration slider (centered under the app selector)
+        // Hold-duration: four discrete stops (Instant / Short / Medium / Long).
         y -= g + sliderBlockH
-        let caption = NSTextField(labelWithString: "Hold Duration")
+        let caption = NSTextField(labelWithString: "Delay / Hold Duration")
         caption.frame = NSRect(x: pad, y: y + sliderBlockH - 20, width: innerW, height: 18)
         caption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
         caption.textColor = .secondaryLabelColor
         caption.alignment = .center
         c.addSubview(caption)
 
+        let hint = NSTextField(labelWithString: "Hold the right ⌘ key to preview")
+        hint.frame = NSRect(x: pad, y: y + sliderBlockH - 36, width: innerW, height: 14)
+        hint.font = .systemFont(ofSize: NSFont.systemFontSize - 2)
+        hint.textColor = .tertiaryLabelColor
+        hint.alignment = .center
+        c.addSubview(hint)
+
         let sliderW: CGFloat = 320
         let sliderX = (contentW - sliderW) / 2
         let sliderY = y + 16
+        let labels = SettingsWindow.durationLabels
+        let last = labels.count - 1
 
-        let maxTenths = 6                       // longest hold = 0.6s
-        let slider = NSSlider(value: appDelegate?.holdDuration ?? 0.3,
-                              minValue: 0.0, maxValue: Double(maxTenths) / 10.0,
+        let slider = NSSlider(value: Double(appDelegate?.selectedPreset ?? 1),
+                              minValue: 0, maxValue: Double(last),
                               target: self, action: #selector(sliderChanged(_:)))
         slider.frame = NSRect(x: sliderX, y: sliderY, width: sliderW, height: 22)
-        slider.numberOfTickMarks = maxTenths + 1   // every 0.1
+        slider.numberOfTickMarks = labels.count
+        slider.allowsTickMarkValuesOnly = true
         slider.tickMarkPosition = .below
         c.addSubview(slider)
 
-        // Per-tick time labels (aligned under each 0.1s mark)
-        let knobInset: CGFloat = 8              // track inset for the knob
+        // Stop labels under each tick.
+        let knobInset: CGFloat = 8
         let trackLeft = sliderX + knobInset
         let trackW = sliderW - knobInset * 2
-        for i in 0...maxTenths {
-            let v = Double(i) / Double(maxTenths)
-            let text: String = (i == 0) ? "0" : String(format: ".%d", i)
+        for (i, text) in labels.enumerated() {
             let lbl = NSTextField(labelWithString: text)
-            lbl.font = .systemFont(ofSize: 9)
-            lbl.textColor = .tertiaryLabelColor
+            lbl.font = .systemFont(ofSize: 10)
+            lbl.textColor = .secondaryLabelColor
             lbl.alignment = .center
-            let lw: CGFloat = 20
-            let cx = trackLeft + CGFloat(v) * trackW
-            lbl.frame = NSRect(x: cx - lw / 2, y: y - 2, width: lw, height: 12)
+            let lw: CGFloat = 70
+            let cx = trackLeft + (CGFloat(i) / CGFloat(last)) * trackW
+            lbl.frame = NSRect(x: cx - lw / 2, y: y - 3, width: lw, height: 13)
             c.addSubview(lbl)
         }
 
@@ -492,7 +574,8 @@ class SettingsWindow: NSWindow {
     }
 
     @objc private func sliderChanged(_ sender: NSSlider) {
-        appDelegate?.holdDuration = sender.doubleValue
+        let idx = max(0, min(Self.durationLabels.count - 1, Int(sender.doubleValue.rounded())))
+        appDelegate?.selectedPreset = idx
     }
 
     @objc private func chooseApp() {
@@ -517,6 +600,233 @@ class SettingsWindow: NSWindow {
 
     @objc private func openCoffee() {
         NSWorkspace.shared.open(URL(string: "https://ko-fi.com/grokcodile")!)
+    }
+}
+
+// MARK: - Trigger HUD
+
+/// A transparent, click-through overlay that shows a glowing ⌘ "charging" ring
+/// while the right Command key is held, then a burst when it triggers. Floats
+/// above everything (including full-screen Spaces) without stealing focus.
+final class TriggerHUD {
+    private let size: CGFloat = 320   // generous so the expanding ring isn't clipped
+    private let cyan = NSColor(srgbRed: 0.40, green: 0.82, blue: 1.0, alpha: 1.0).cgColor
+
+    private lazy var panel: NSPanel = makePanel()
+    private let track = CAShapeLayer()
+    private let ring = CAShapeLayer()
+    private let iconLayer = CALayer()
+    private let previewPill = CALayer()        // "Preview" pill background (preview mode only)
+    private let previewLabel = CATextLayer()   // "Preview" caption text
+    private var expandOnFire = true   // skip the radiate for very short holds
+
+    private var host: CALayer { panel.contentView!.layer! }
+
+    // MARK: Public
+
+    func begin(fill: TimeInterval, icon: NSImage?, preview: Bool = false) {
+        positionHUD()
+        expandOnFire = true
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        // Clear any leftover (non-removed) animations from a prior run, or the
+        // layer stays pinned at its faded-out state and never shows again.
+        host.removeAllAnimations()
+        ring.removeAllAnimations()
+        track.removeAllAnimations()
+        previewPill.isHidden = !preview
+        host.opacity = 1
+        track.opacity = 1
+        ring.strokeEnd = 1   // full ring (the charge animation draws it on)
+        if let icon {
+            var rect = CGRect(origin: .zero, size: icon.size)
+            iconLayer.contents = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+        }
+        CATransaction.commit()
+
+        panel.orderFrontRegardless()
+
+        // Draw the ring on over the hold duration. "None" (fill == 0) clamps to
+        // a near-instant charge — same animation, just immediate.
+        let anim = CABasicAnimation(keyPath: "strokeEnd")
+        anim.fromValue = 0
+        anim.toValue = 1
+        anim.duration = max(fill, 0.001)
+        anim.timingFunction = CAMediaTimingFunction(name: .linear)
+        anim.fillMode = .forwards
+        anim.isRemovedOnCompletion = false
+        ring.add(anim, forKey: "fill")
+    }
+
+    func cancel() {
+        // Snap the ring to its current visible value, then drain + fade.
+        let cur = ring.presentation()?.strokeEnd ?? ring.strokeEnd
+        ring.removeAnimation(forKey: "fill")
+        CATransaction.begin(); CATransaction.setDisableActions(true); ring.strokeEnd = cur; CATransaction.commit()
+
+        let drain = CABasicAnimation(keyPath: "strokeEnd")
+        drain.fromValue = cur; drain.toValue = 0; drain.duration = 0.18
+        drain.fillMode = .forwards; drain.isRemovedOnCompletion = false
+        ring.strokeEnd = 0
+        ring.add(drain, forKey: "drain")
+        fadeOut(duration: 0.18)
+    }
+
+    /// Trigger the burst. `fade` is how long the ring + icon take to dissolve;
+    /// `swellTo` is how far the ring expands as it goes. A long fade with a
+    /// small swell reads as a gentle dissolve; a short fade with a big swell
+    /// reads as a quick, dramatic pop.
+    func fire(fade: TimeInterval = 0.4, swellTo: CGFloat = 2.4) {
+        ring.removeAnimation(forKey: "fill")
+        CATransaction.begin(); CATransaction.setDisableActions(true); ring.strokeEnd = 1; CATransaction.commit()
+
+        guard expandOnFire else { fadeOut(duration: fade); return }
+
+        // Hide the faint track instantly so only the glowing ring expands.
+        CATransaction.begin(); CATransaction.setDisableActions(true); track.opacity = 0; CATransaction.commit()
+
+        // The full ring expands outward and fades.
+        let expand = CABasicAnimation(keyPath: "transform.scale")
+        expand.fromValue = 1.0
+        expand.toValue = swellTo
+        expand.duration = fade
+        expand.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        expand.fillMode = .forwards
+        expand.isRemovedOnCompletion = false
+        ring.add(expand, forKey: "expand")
+
+        fadeOut(duration: fade)
+    }
+
+    /// Immediately remove the panel and clear every animation, with no fade.
+    /// Called right before a Space-changing toggle so the HUD is gone from the
+    /// window server before the full-screen transition snapshots the outgoing
+    /// Space — otherwise the (still-fading) ring is captured in that snapshot
+    /// and appears to slide away with the Space.
+    func hideNow() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        host.removeAllAnimations()
+        ring.removeAllAnimations()
+        track.removeAllAnimations()
+        host.opacity = 0          // begin() resets this to 1 on the next show
+        CATransaction.commit()
+        panel.orderOut(nil)
+    }
+
+    // MARK: Setup
+
+    private func makePanel() -> NSPanel {
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: size, height: size),
+                        styleMask: [.borderless, .nonactivatingPanel],
+                        backing: .buffered, defer: false)
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = false
+        p.level = .screenSaver
+        p.ignoresMouseEvents = true
+        // canJoinAllSpaces + stationary: present on every Space and pinned in
+        // place, so it doesn't slide with the Space-switch transition.
+        p.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        p.isReleasedWhenClosed = false
+
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: size, height: size))
+        v.wantsLayer = true
+        v.layer?.backgroundColor = NSColor.clear.cgColor
+        v.layer?.isOpaque = false
+        p.contentView = v
+        buildLayers(in: v.layer!)
+        return p
+    }
+
+    private func buildLayers(in root: CALayer) {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let c = CGPoint(x: size / 2, y: size / 2)
+        let r: CGFloat = 52
+        let arc = CGMutablePath()
+        arc.addArc(center: c, radius: r, startAngle: .pi / 2, endAngle: .pi / 2 - .pi * 2, clockwise: true)
+
+        track.path = arc
+        track.fillColor = NSColor.clear.cgColor
+        track.strokeColor = NSColor(white: 1, alpha: 0.14).cgColor
+        track.lineWidth = 7
+        track.frame = root.bounds
+        track.contentsScale = scale
+        root.addSublayer(track)
+
+        ring.path = arc
+        ring.fillColor = NSColor.clear.cgColor
+        ring.strokeColor = cyan
+        ring.lineWidth = 7
+        ring.lineCap = .round
+        ring.strokeEnd = 0
+        ring.frame = root.bounds
+        ring.contentsScale = scale
+        ring.shadowColor = cyan
+        ring.shadowRadius = 8
+        ring.shadowOpacity = 0.9
+        ring.shadowOffset = .zero
+        root.addSublayer(ring)
+
+        // The chosen app's icon sits in the center of the ring.
+        let iconSize: CGFloat = 64
+        iconLayer.frame = CGRect(x: c.x - iconSize / 2, y: c.y - iconSize / 2,
+                                 width: iconSize, height: iconSize)
+        iconLayer.contentsGravity = .resizeAspect
+        iconLayer.contentsScale = scale
+        root.addSublayer(iconLayer)
+
+        // "Preview" pill above the ring — shown only in preview mode. A white
+        // rounded capsule with dark text, sized to fit the word, sitting well
+        // clear of the ring (and its swell).
+        let pFont = NSFont.systemFont(ofSize: 18, weight: .semibold)
+        let textW = ceil(("Preview" as NSString).size(withAttributes: [.font: pFont]).width)
+        let pillW = textW + 44, pillH: CGFloat = 32
+        previewPill.frame = CGRect(x: c.x - pillW / 2, y: c.y + r + 40, width: pillW, height: pillH)
+        previewPill.backgroundColor = NSColor(white: 0.97, alpha: 0.95).cgColor
+        previewPill.cornerRadius = pillH / 2
+        previewPill.contentsScale = scale
+        previewPill.shadowColor = NSColor.black.cgColor
+        previewPill.shadowRadius = 6
+        previewPill.shadowOpacity = 0.25
+        previewPill.shadowOffset = CGSize(width: 0, height: -1)
+        previewPill.isHidden = true
+        root.addSublayer(previewPill)
+
+        previewLabel.string = "Preview"
+        previewLabel.font = pFont
+        previewLabel.fontSize = 18
+        previewLabel.foregroundColor = NSColor(white: 0.12, alpha: 1).cgColor
+        previewLabel.alignmentMode = .center
+        previewLabel.contentsScale = scale
+        previewLabel.frame = CGRect(x: 0, y: (pillH - 23) / 2, width: pillW, height: 23)
+        previewPill.addSublayer(previewLabel)
+    }
+
+    // MARK: Helpers
+
+    private func positionHUD() {
+        // Fixed near the bottom-center of the active screen, like the macOS
+        // volume/brightness HUD.
+        let m = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(m, $0.frame, false) } ?? NSScreen.main
+        guard let f = screen?.visibleFrame else { return }
+        let x = f.midX - size / 2
+        let y = f.minY + 150 - size / 2   // ring center ~150 pt above the bottom
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func fadeOut(duration: TimeInterval) {
+        let f = CABasicAnimation(keyPath: "opacity")
+        f.fromValue = host.presentation()?.opacity ?? 1
+        f.toValue = 0
+        f.duration = duration
+        f.fillMode = .forwards
+        f.isRemovedOnCompletion = false
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in self?.panel.orderOut(nil) }
+        host.add(f, forKey: "fade")
+        host.opacity = 0
+        CATransaction.commit()
     }
 }
 

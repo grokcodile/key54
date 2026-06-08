@@ -34,7 +34,8 @@ Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
 
 - Hold right-⌘ to toggle a single chosen app in and out of focus.
 - Works with **any** application, not just terminals.
-- Adjustable **hold duration** — from 0 s (instant) up to 0.6 s — so a quick press or normal right-⌘ shortcut is never hijacked.
+- **Hold-duration presets** (Instant / Short / Medium / Long) with a built-in dead-zone, so a quick press or normal right-⌘ shortcut is never hijacked.
+- A subtle **charge animation** — the chosen app's icon in a glowing ring — plays as you hold and dissolves as it switches. Preview any preset right from the settings window.
 - Correctly returns you to the previous app — including full-screen apps and apps with no open windows.
 - Runs silently as a background agent (no Dock icon, no menu bar), and starts at login.
 
@@ -73,7 +74,7 @@ This compiles `main.swift`, generates the app icon from `trapdoor_icon.png`, ad-
 1. Launch **Trapdoor** from `Applications`. Its window opens.
 2. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Trapdoor. This lets it detect the right Command key.
 3. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
-4. Optionally adjust the **Hold Duration** (how long you hold the key before it triggers).
+4. Optionally pick a **Delay / Hold Duration** preset (how long you hold before it triggers). Hold the right ⌘ key with the window focused to preview the animation.
 5. Click **Done**. Trapdoor keeps running in the background (and starts automatically at login).
 
 To change the app or settings later, just open Trapdoor again from `Applications`.
