@@ -74,7 +74,7 @@ This compiles `main.swift`, generates the app icon from `trapdoor_icon.png`, ad-
 1. Launch **Trapdoor** from `Applications`. Its window opens.
 2. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Trapdoor. This lets it detect the right Command key.
 3. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
-4. Optionally pick a **Delay / Hold Duration** preset (how long you hold before it triggers). Hold the right ⌘ key with the window focused to preview the animation.
+4. Optionally pick a **Hold Duration** preset (how long you hold before it triggers). Hold the right ⌘ key with the window focused to preview the animation.
 5. Click **Done**. Trapdoor keeps running in the background (and starts automatically at login).
 
 To change the app or settings later, just open Trapdoor again from `Applications`.

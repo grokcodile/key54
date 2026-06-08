@@ -467,7 +467,7 @@ class SettingsWindow: NSWindow {
 
         // Hold-duration: four discrete stops (Instant / Short / Medium / Long).
         y -= g + sliderBlockH
-        let caption = NSTextField(labelWithString: "Delay / Hold Duration")
+        let caption = NSTextField(labelWithString: "Hold Duration")
         caption.frame = NSRect(x: pad, y: y + sliderBlockH - 20, width: innerW, height: 18)
         caption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
         caption.textColor = .secondaryLabelColor
