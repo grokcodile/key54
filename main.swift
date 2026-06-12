@@ -57,11 +57,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey]
                 as? NSRunningApplication else { return }
         let bundleID = app.bundleIdentifier
-        // Track the app to return to — but never the target itself, and never
-        // Trapdoor (so opening Settings then summoning doesn't make us the
-        // "previous" app).
-        if bundleID != resolvedBundleID(), bundleID != Bundle.main.bundleIdentifier {
+        // Track the app to return to — but never the target itself.
+        guard bundleID != resolvedBundleID() else { return }
+        if bundleID == Bundle.main.bundleIdentifier {
+            // Track ourselves only while the settings window is open, so
+            // trapdooring out of Settings trapdoors back to it. Background
+            // activations with no window never claim the "previous" slot.
+            if settingsWindow?.isVisible == true { previousApp = app }
+        } else {
             previousApp = app
+        }
+    }
+
+    /// Called when the settings window closes: returning to Trapdoor only
+    /// makes sense while the window is up, so forget it as the previous app.
+    func settingsClosed() {
+        if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier {
+            previousApp = nil
         }
     }
 
@@ -636,7 +648,14 @@ class SettingsWindow: NSWindow {
     // MARK: - Actions
 
     @objc private func saveAndClose() {
+        appDelegate?.settingsClosed()
         orderOut(nil)
+    }
+
+    // The titlebar close button takes this path rather than saveAndClose.
+    override func close() {
+        appDelegate?.settingsClosed()
+        super.close()
     }
 
     @objc private func sliderChanged(_ sender: NSSlider) {
