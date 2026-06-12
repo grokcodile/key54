@@ -33,22 +33,11 @@ Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
 ## Features
 
 - Hold right-⌘ to toggle a single chosen app in and out of focus.
-- Works with **any** application, not just terminals.
+- Works with **any** application of your choice.
 - **Hold-duration presets** (Instant / Short / Medium / Long) with a built-in dead-zone, so a quick press or normal right-⌘ shortcut is never hijacked. **Instant** skips the animation entirely and switches the moment you press.
-- A subtle **charge animation** — the chosen app's icon in a glowing ring on a Liquid Glass bezel (macOS 26+; frosted glass on older systems) — plays as you hold and dissolves as it switches. The ring follows your accent color.
+- A subtle **charge animation** — the chosen app's icon in a glowing ring on a Liquid Glass bezel (macOS 26+; frosted glass on older systems) — plays as you hold and dissolves as it switches. The rings color is based on the macOS accent color you have selected in System settings.
 - Correctly returns you to the previous app — including full-screen apps and apps with no open windows.
 - Runs silently as a background agent (no Dock icon, no menu bar), and starts at login.
-
-## Hold Duration
-
-The slider in settings controls how long you hold the right ⌘ key before the switch fires — and how much ceremony comes with it. Every stop past Instant starts with a *dead-zone* (nothing appears yet, and letting go does nothing), followed by a charge ring you can watch fill. Release any time before the ring completes and the switch is cancelled.
-
-| Preset | Hold to trigger | Behavior |
-| --- | --- | --- |
-| **Instant** | A press — no hold | Completely hands the right ⌘ key to Trapdoor: no hold, no delay, no animation — the moment you press, you've switched. Quick taps and right-⌘ shortcuts trigger it too, so pick this only if you're dedicating the key. |
-| **Short** | ~0.5 s | A snappy switch that still leaves normal right-⌘ shortcuts usable — anything shorter than the half-second dead-zone is ignored. No charge ring; the app's icon simply appears and dissolves into the switch. |
-| **Medium** *(default)* | ~0.9 s (0.5 s dead-zone + 0.4 s charge) | The best mix: enough delay to cancel the switch early just by letting go, a smooth transition that supports a more graceful mental shift between tasks, and still quick and responsive. |
-| **Long** | ~1.3 s (0.7 s dead-zone + 0.6 s charge) | An even more generous, deliberate task-switching experience — maximum time to watch the ring fill and change your mind. |
 
 ## Usage Examples
 
@@ -63,6 +52,18 @@ Pick the one app you're *always* dropping into and back out of, bind it with Tra
 - **Manager** — bind your email or chat client (Mail, Messages, Slack). Glance at a message and reply, then drop straight back into focus — without getting sucked in and losing the thread of deeper work.
 
 Whatever you assign as your **Trapdoor**, the pattern is the same: **summon → do the thing → dismiss** — without ever breaking stride or wondering which shortcut to press.
+
+## Hold Duration
+
+The slider in settings controls how long you hold the right ⌘ key before the switch fires — and how much ceremony comes with it. Every stop past Instant starts with a *dead-zone* (nothing appears yet, and letting go does nothing), followed by a charge ring you can watch fill. Release any time before the ring completes and the switch is cancelled.
+
+| Preset | Hold to trigger | Behavior |
+| --- | --- | --- |
+| **Instant** | A press — no hold | Completely hands the right ⌘ key to Trapdoor: no hold, no delay, no animation — the moment you press, you've switched. Quick taps and right-⌘ shortcuts trigger it too, so pick this only if you're dedicating the key. |
+| **Short** | ~0.5 s | A snappy switch that still leaves normal right-⌘ shortcuts usable — anything shorter than the half-second dead-zone is ignored. No charge ring; the app's icon simply appears and dissolves into the switch. |
+| **Medium** *(default)* | ~0.9 s (0.5 s dead-zone + 0.4 s charge) | The best mix: enough delay to cancel the switch early just by letting go, a smooth transition that supports a more graceful mental shift between tasks, and still quick and responsive. |
+| **Long** | ~1.3 s (0.7 s dead-zone + 0.6 s charge) | An even more generous, deliberate task-switching experience — maximum time to watch the ring fill and change your mind. |
+
 
 ## Requirements
 
