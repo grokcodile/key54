@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macOS 26 image: its SDK has the Liquid Glass APIs, so release builds get
+    # the glass HUD (build.sh still targets macOS 13 for older systems).
+    runs-on: macos-26
     env:
       # Run JS actions on Node 24 (silences the Node 20 deprecation warning).
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"

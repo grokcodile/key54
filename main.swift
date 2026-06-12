@@ -160,9 +160,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Event tap
 
     private var holdTimer: Timer?
-    /// Which preset is active (0 = Instant … 3 = Long).
+    /// Which preset is active (0 = None … 4 = Long).
     var selectedPreset: Int {
-        get { max(0, min(3, UserDefaults.standard.object(forKey: "presetIndex") as? Int ?? 1)) }
+        get { max(0, min(4, UserDefaults.standard.object(forKey: "presetIndex") as? Int ?? 2)) }
         set { UserDefaults.standard.set(newValue, forKey: "presetIndex") }
     }
 
@@ -231,15 +231,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func arm() {
         let stop = selectedPreset
         let charge = SettingsWindow.durationValues[stop]
-        let fade = SettingsWindow.fadeConstant
+        // Instant has no charge sweep, so give its dissolve extra time —
+        // at the normal fade the icon just flashes.
+        let fade = stop == 1 ? 0.6 : SettingsWindow.fadeConstant
         let swell = SettingsWindow.swellConstant
 
         // Preview mode: only while the settings window is actually the key
-        // window. Play the full animation with Trapdoor's own icon but DON'T
-        // switch apps — so you can feel each preset while tuning. Gating on
-        // isKeyWindow (not just "Trapdoor is frontmost") means clicking Done,
-        // which hides the window, immediately stops previewing.
+        // window. Play the full animation with Trapdoor's own icon and the
+        // "Preview" pill but DON'T switch apps — so you can feel each
+        // preset while tuning. Gating on isKeyWindow (not just "Trapdoor is
+        // frontmost") means clicking Done, which hides the window,
+        // immediately stops previewing.
         let preview = settingsWindow?.isKeyWindow == true
+
+        // "None": no HUD, no ceremony — switch the moment the key is held.
+        if stop == 0 {
+            if !preview { toggleApp() }
+            return
+        }
 
         if showAnimation {
             let icon: NSImage?
@@ -281,7 +290,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func cancelToggle() {
         bufferTimer?.invalidate(); bufferTimer = nil
         holdTimer?.invalidate(); holdTimer = nil
-        if hudVisible { hud.cancel(); hudVisible = false }
+        if hudVisible { hud.cancel(fade: SettingsWindow.fadeConstant); hudVisible = false }
     }
 
     @objc private func axPermissionChanged() {
@@ -305,22 +314,25 @@ class SettingsWindow: NSWindow {
 
     // Hold-duration presets. Each stop has its own dead-zone buffer and charge
     // sweep (how long the ring fills); the dissolve and swell are constant. The
-    // full trigger time is buffer + charge.
-    static let durationLabels = ["Instant", "Short", "Medium", "Long"]
-    static let bufferValues:   [TimeInterval] = [0.0, 0.3, 0.4, 0.5]   // pre-buffer dead-zone
-    static let durationValues: [TimeInterval] = [0.0, 0.4, 0.6, 0.8]   // charge sweep
+    // full trigger time is buffer + charge. "None" skips the animation
+    // entirely and switches the moment the key is held.
+    static let durationLabels = ["None", "Instant", "Short", "Medium", "Long"]
+    static let bufferValues:   [TimeInterval] = [0.0, 0.0, 0.3, 0.4, 0.5]   // pre-buffer dead-zone
+    static let durationValues: [TimeInterval] = [0.0, 0.0, 0.4, 0.6, 0.8]   // charge sweep
     static let fadeConstant: TimeInterval = 0.4                        // dissolve
-    static let swellConstant: CGFloat = 1.6                            // ring expansion
+    static let swellConstant: CGFloat = 1.12                           // gel-release expansion
 
     init(delegate: AppDelegate) {
         self.appDelegate = delegate
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 100),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         self.title = ""
+        self.titlebarAppearsTransparent = true
+        self.isMovableByWindowBackground = true
         self.isReleasedWhenClosed = false
         self.isRestorable = false
         rebuild()
@@ -340,8 +352,9 @@ class SettingsWindow: NSWindow {
         let needsBanner = !AXIsProcessTrusted()
         let innerW = contentW - pad * 2
 
-        // Fixed vertical metrics (top → bottom)
-        let topMargin: CGFloat = 28
+        // Fixed vertical metrics (top → bottom). The content view runs under
+        // the transparent titlebar, so the top margin includes its height.
+        let topMargin: CGFloat = 56
         let titleH: CGFloat = 36
         let descH: CGFloat = 92
         let chooseH: CGFloat = 32
@@ -363,8 +376,12 @@ class SettingsWindow: NSWindow {
 
         setContentSize(NSSize(width: contentW, height: totalH))
 
-        // Fresh content view
-        let c = NSView(frame: NSRect(x: 0, y: 0, width: contentW, height: totalH))
+        // Fresh content view — a behind-window material so the whole window
+        // (titlebar included) reads as one translucent system surface.
+        let c = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: contentW, height: totalH))
+        c.material = .underWindowBackground
+        c.blendingMode = .behindWindow
+        c.state = .followsWindowActiveState
         var y = totalH - topMargin
 
         // Accessibility banner (above title)
@@ -608,35 +625,57 @@ class SettingsWindow: NSWindow {
 /// A transparent, click-through overlay that shows a glowing ⌘ "charging" ring
 /// while the right Command key is held, then a burst when it triggers. Floats
 /// above everything (including full-screen Spaces) without stealing focus.
+/// The ring + icon sit on a Liquid Glass slab (macOS 26+) so the HUD reads
+/// like a system bezel; older systems get the classic frosted HUD material.
 final class TriggerHUD {
     private let size: CGFloat = 320   // generous so the expanding ring isn't clipped
-    private let cyan = NSColor(srgbRed: 0.40, green: 0.82, blue: 1.0, alpha: 1.0).cgColor
+    private let ringRadius: CGFloat = 52
 
     private lazy var panel: NSPanel = makePanel()
     private let track = CAShapeLayer()
     private let ring = CAShapeLayer()
     private let iconLayer = CALayer()
-    private let previewPill = CALayer()        // "Preview" pill background (preview mode only)
-    private let previewLabel = CATextLayer()   // "Preview" caption text
+    private var puckView: NSView!     // glass slab behind the ring + icon
+    private var puckRestFrame = NSRect.zero
+    private var pillView: NSView!     // "Preview" capsule (preview mode only)
     private var expandOnFire = true   // skip the radiate for very short holds
-
-    private var host: CALayer { panel.contentView!.layer! }
+    private var fadeGeneration = 0    // invalidates stale fade-out completions
+    private var chargeDuration: TimeInterval = 0.001   // current preset's fill time
 
     // MARK: Public
 
     func begin(fill: TimeInterval, icon: NSImage?, preview: Bool = false) {
         positionHUD()
         expandOnFire = true
+        let instant = fill <= 0   // Instant preset: no ring, just a larger icon
+
+        // Cancel any in-flight fade and restore full window opacity (and the
+        // glass slab's resting frame), or the panel stays pinned at its
+        // faded-out state and never shows again.
+        fadeGeneration += 1
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
+        panel.animator().alphaValue = 1
+        puckView.animator().frame = puckRestFrame
+        NSAnimationContext.endGrouping()
+
+        pillView.isHidden = !preview
+
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        // Clear any leftover (non-removed) animations from a prior run, or the
-        // layer stays pinned at its faded-out state and never shows again.
-        host.removeAllAnimations()
         ring.removeAllAnimations()
         track.removeAllAnimations()
-        previewPill.isHidden = !preview
-        host.opacity = 1
-        track.opacity = 1
+        iconLayer.removeAllAnimations()
+        // Re-resolve the accent color so a change in System Settings shows up
+        // on the next trigger (CGColor snapshots don't track the dynamic color).
+        ring.strokeColor = NSColor.controlAccentColor.cgColor
+        ring.shadowColor = NSColor.controlAccentColor.cgColor
+        ring.opacity = instant ? 0 : 1   // also resets cancel()'s post-drain hide
+        track.opacity = instant ? 0 : 1
         ring.strokeEnd = 1   // full ring (the charge animation draws it on)
+        let iconSize: CGFloat = instant ? 84 : 64
+        iconLayer.frame = CGRect(x: size / 2 - iconSize / 2,
+                                 y: size / 2 - iconSize / 2,
+                                 width: iconSize, height: iconSize)
         if let icon {
             var rect = CGRect(origin: .zero, size: icon.size)
             iconLayer.contents = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil)
@@ -646,53 +685,101 @@ final class TriggerHUD {
         panel.orderFrontRegardless()
 
         // Draw the ring on over the hold duration. "None" (fill == 0) clamps to
-        // a near-instant charge — same animation, just immediate.
+        // a near-instant charge — same animation, just immediate. Remember the
+        // rate so an early release can drain back at the same speed.
+        chargeDuration = max(fill, 0.001)
         let anim = CABasicAnimation(keyPath: "strokeEnd")
         anim.fromValue = 0
         anim.toValue = 1
-        anim.duration = max(fill, 0.001)
+        anim.duration = chargeDuration
         anim.timingFunction = CAMediaTimingFunction(name: .linear)
         anim.fillMode = .forwards
         anim.isRemovedOnCompletion = false
         ring.add(anim, forKey: "fill")
     }
 
-    func cancel() {
-        // Snap the ring to its current visible value, then drain + fade.
+    /// Early release: drain the ring back at the same rate it charged, then
+    /// dissolve with the same grace as a full-duration dismissal — but
+    /// settling slightly inward, the opposite of the firing swell.
+    func cancel(fade: TimeInterval = 0.4) {
+        // Snap the ring to its current visible value.
         let cur = ring.presentation()?.strokeEnd ?? ring.strokeEnd
         ring.removeAnimation(forKey: "fill")
         CATransaction.begin(); CATransaction.setDisableActions(true); ring.strokeEnd = cur; CATransaction.commit()
 
         let drain = CABasicAnimation(keyPath: "strokeEnd")
-        drain.fromValue = cur; drain.toValue = 0; drain.duration = 0.18
-        drain.fillMode = .forwards; drain.isRemovedOnCompletion = false
+        drain.fromValue = cur
+        drain.toValue = 0
+        // Drain at 1.5× the charge rate — present enough to read as a
+        // discharge, brisk enough that backing out never feels like a wait.
+        drain.duration = max(TimeInterval(cur) * chargeDuration / 1.5, 0.01)
+        drain.timingFunction = CAMediaTimingFunction(name: .linear)
+        drain.fillMode = .forwards
+        drain.isRemovedOnCompletion = false
+
+        let gen = fadeGeneration
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        CATransaction.setCompletionBlock { [weak self] in
+            // Skip the dissolve if a new hold started during the drain.
+            guard let self, self.fadeGeneration == gen else { return }
+            self.dissolve(fade: fade, scaleTo: 0.9, layers: [self.track, self.iconLayer])
+        }
         ring.strokeEnd = 0
+        ring.opacity = 0
         ring.add(drain, forKey: "drain")
-        fadeOut(duration: 0.18)
+        // A zero-length stroke with a round cap still draws the cap — a dot at
+        // the path start. Hold full opacity through the drain, then wink the
+        // ring out at the exact instant it empties; hiding it from the
+        // completion block instead can land a frame late and flash the dot.
+        let hide = CABasicAnimation(keyPath: "opacity")
+        hide.fromValue = 1
+        hide.toValue = 0
+        hide.duration = 0.01
+        hide.beginTime = ring.convertTime(CACurrentMediaTime(), from: nil) + drain.duration
+        hide.fillMode = .backwards
+        ring.add(hide, forKey: "hide")
+        CATransaction.commit()
     }
 
-    /// Trigger the burst. `fade` is how long the ring + icon take to dissolve;
-    /// `swellTo` is how far the ring expands as it goes. A long fade with a
-    /// small swell reads as a gentle dissolve; a short fade with a big swell
-    /// reads as a quick, dramatic pop.
-    func fire(fade: TimeInterval = 0.4, swellTo: CGFloat = 2.4) {
+    /// Trigger the dissolve. `fade` is how long everything takes to fade;
+    /// `swellTo` is a slight gel-like expansion of the whole HUD — ring, icon,
+    /// and glass slab together — as it goes, like a system bezel releasing.
+    /// Kept subtle so nothing escapes past the slab's edge.
+    func fire(fade: TimeInterval = 0.4, swellTo: CGFloat = 1.12) {
         ring.removeAnimation(forKey: "fill")
         CATransaction.begin(); CATransaction.setDisableActions(true); ring.strokeEnd = 1; CATransaction.commit()
 
         guard expandOnFire else { fadeOut(duration: fade); return }
 
-        // Hide the faint track instantly so only the glowing ring expands.
+        // Hide the faint track instantly so only the glowing ring remains.
         CATransaction.begin(); CATransaction.setDisableActions(true); track.opacity = 0; CATransaction.commit()
 
-        // The full ring expands outward and fades.
-        let expand = CABasicAnimation(keyPath: "transform.scale")
-        expand.fromValue = 1.0
-        expand.toValue = swellTo
-        expand.duration = fade
-        expand.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        expand.fillMode = .forwards
-        expand.isRemovedOnCompletion = false
-        ring.add(expand, forKey: "expand")
+        // Ring and icon swell in lockstep with the glass slab below them.
+        dissolve(fade: fade, scaleTo: swellTo, layers: [ring, iconLayer])
+    }
+
+    /// Shared exit: fade the panel while the given layers and the glass slab
+    /// scale gently to `scaleTo` — outward (> 1) when firing, inward (< 1)
+    /// on an early release.
+    private func dissolve(fade: TimeInterval, scaleTo: CGFloat, layers: [CALayer]) {
+        for layer in layers {
+            let scale = CABasicAnimation(keyPath: "transform.scale")
+            scale.fromValue = 1.0
+            scale.toValue = scaleTo
+            scale.duration = fade
+            scale.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            scale.fillMode = .forwards
+            scale.isRemovedOnCompletion = false
+            layer.add(scale, forKey: "dissolveScale")
+        }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = fade
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            puckView.animator().frame = puckRestFrame.insetBy(
+                dx: -puckRestFrame.width * (scaleTo - 1) / 2,
+                dy: -puckRestFrame.height * (scaleTo - 1) / 2)
+        }
 
         fadeOut(duration: fade)
     }
@@ -703,13 +790,14 @@ final class TriggerHUD {
     /// Space — otherwise the (still-fading) ring is captured in that snapshot
     /// and appears to slide away with the Space.
     func hideNow() {
+        fadeGeneration += 1   // a pending fade-out completion must not fire later
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        host.removeAllAnimations()
         ring.removeAllAnimations()
         track.removeAllAnimations()
-        host.opacity = 0          // begin() resets this to 1 on the next show
+        iconLayer.removeAllAnimations()
         CATransaction.commit()
+        panel.alphaValue = 0   // begin() restores this on the next show
         panel.orderOut(nil)
     }
 
@@ -733,15 +821,86 @@ final class TriggerHUD {
         v.wantsLayer = true
         v.layer?.backgroundColor = NSColor.clear.cgColor
         v.layer?.isOpaque = false
+
+        // Glass slab behind the ring + icon, sized so the ring (and the slight
+        // firing swell) sits comfortably inside it.
+        let puckSize: CGFloat = 148
+        puckRestFrame = NSRect(x: (size - puckSize) / 2, y: (size - puckSize) / 2,
+                               width: puckSize, height: puckSize)
+        puckView = Self.glassBackdrop(frame: puckRestFrame, cornerRadius: 36)
+        v.addSubview(puckView)
+
+        // "Preview" capsule above the ring — same glass treatment, shown only
+        // in preview mode, sitting well clear of the ring (and its swell).
+        let pillLabel = NSTextField(labelWithString: "Preview")
+        pillLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        pillLabel.sizeToFit()
+        let pillW = ceil(pillLabel.frame.width) + 44
+        let pillH: CGFloat = 36
+        let pillContent = NSView(frame: NSRect(x: 0, y: 0, width: pillW, height: pillH))
+        pillLabel.setFrameOrigin(NSPoint(x: (pillW - pillLabel.frame.width) / 2,
+                                         y: (pillH - pillLabel.frame.height) / 2))
+        pillContent.addSubview(pillLabel)
+        pillView = Self.glassBackdrop(
+            frame: NSRect(x: (size - pillW) / 2, y: size / 2 + ringRadius + 40,
+                          width: pillW, height: pillH),
+            cornerRadius: pillH / 2, content: pillContent)
+        pillView.isHidden = true
+        v.addSubview(pillView)
+
+        // The animated ring/icon layers live in their own view above the glass.
+        let overlay = NSView(frame: v.bounds)
+        overlay.wantsLayer = true
+        overlay.layer?.backgroundColor = NSColor.clear.cgColor
+        v.addSubview(overlay)
+        buildLayers(in: overlay.layer!)
+
         p.contentView = v
-        buildLayers(in: v.layer!)
         return p
+    }
+
+    /// A Liquid Glass backdrop on macOS 26+, falling back to the classic
+    /// frosted HUD material on older systems (or older build toolchains).
+    private static func glassBackdrop(frame: NSRect, cornerRadius: CGFloat,
+                                      content: NSView? = nil) -> NSView {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            let g = NSGlassEffectView(frame: frame)
+            g.cornerRadius = cornerRadius
+            if let content { g.contentView = content }
+            return g
+        }
+        #endif
+        let v = NSVisualEffectView(frame: frame)
+        v.material = .hudWindow
+        v.blendingMode = .behindWindow
+        v.state = .active
+        v.maskImage = roundedMask(cornerRadius: cornerRadius)
+        if let content {
+            content.frame = NSRect(origin: .zero, size: frame.size)
+            v.addSubview(content)
+        }
+        return v
+    }
+
+    /// Stretchable rounded-rect mask — NSVisualEffectView needs this (rather
+    /// than a layer cornerRadius) so the blur itself is clipped to the shape.
+    private static func roundedMask(cornerRadius r: CGFloat) -> NSImage {
+        let edge = r * 2 + 1
+        let img = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
+            return true
+        }
+        img.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
+        img.resizingMode = .stretch
+        return img
     }
 
     private func buildLayers(in root: CALayer) {
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         let c = CGPoint(x: size / 2, y: size / 2)
-        let r: CGFloat = 52
+        let r = ringRadius
         let arc = CGMutablePath()
         arc.addArc(center: c, radius: r, startAngle: .pi / 2, endAngle: .pi / 2 - .pi * 2, clockwise: true)
 
@@ -755,51 +914,26 @@ final class TriggerHUD {
 
         ring.path = arc
         ring.fillColor = NSColor.clear.cgColor
-        ring.strokeColor = cyan
+        ring.strokeColor = NSColor.controlAccentColor.cgColor
         ring.lineWidth = 7
         ring.lineCap = .round
         ring.strokeEnd = 0
         ring.frame = root.bounds
         ring.contentsScale = scale
-        ring.shadowColor = cyan
+        ring.shadowColor = NSColor.controlAccentColor.cgColor
         ring.shadowRadius = 8
         ring.shadowOpacity = 0.9
         ring.shadowOffset = .zero
         root.addSublayer(ring)
 
-        // The chosen app's icon sits in the center of the ring.
+        // The chosen app's icon sits in the center of the ring. (begin() sets
+        // the frame each show — larger when the Instant preset hides the ring.)
         let iconSize: CGFloat = 64
         iconLayer.frame = CGRect(x: c.x - iconSize / 2, y: c.y - iconSize / 2,
                                  width: iconSize, height: iconSize)
         iconLayer.contentsGravity = .resizeAspect
         iconLayer.contentsScale = scale
         root.addSublayer(iconLayer)
-
-        // "Preview" pill above the ring — shown only in preview mode. A white
-        // rounded capsule with dark text, sized to fit the word, sitting well
-        // clear of the ring (and its swell).
-        let pFont = NSFont.systemFont(ofSize: 18, weight: .semibold)
-        let textW = ceil(("Preview" as NSString).size(withAttributes: [.font: pFont]).width)
-        let pillW = textW + 44, pillH: CGFloat = 32
-        previewPill.frame = CGRect(x: c.x - pillW / 2, y: c.y + r + 40, width: pillW, height: pillH)
-        previewPill.backgroundColor = NSColor(white: 0.97, alpha: 0.95).cgColor
-        previewPill.cornerRadius = pillH / 2
-        previewPill.contentsScale = scale
-        previewPill.shadowColor = NSColor.black.cgColor
-        previewPill.shadowRadius = 6
-        previewPill.shadowOpacity = 0.25
-        previewPill.shadowOffset = CGSize(width: 0, height: -1)
-        previewPill.isHidden = true
-        root.addSublayer(previewPill)
-
-        previewLabel.string = "Preview"
-        previewLabel.font = pFont
-        previewLabel.fontSize = 18
-        previewLabel.foregroundColor = NSColor(white: 0.12, alpha: 1).cgColor
-        previewLabel.alignmentMode = .center
-        previewLabel.contentsScale = scale
-        previewLabel.frame = CGRect(x: 0, y: (pillH - 23) / 2, width: pillW, height: 23)
-        previewPill.addSublayer(previewLabel)
     }
 
     // MARK: Helpers
@@ -816,17 +950,19 @@ final class TriggerHUD {
     }
 
     private func fadeOut(duration: TimeInterval) {
-        let f = CABasicAnimation(keyPath: "opacity")
-        f.fromValue = host.presentation()?.opacity ?? 1
-        f.toValue = 0
-        f.duration = duration
-        f.fillMode = .forwards
-        f.isRemovedOnCompletion = false
-        CATransaction.begin()
-        CATransaction.setCompletionBlock { [weak self] in self?.panel.orderOut(nil) }
-        host.add(f, forKey: "fade")
-        host.opacity = 0
-        CATransaction.commit()
+        // Fade the whole panel via window alpha so the glass slab, the preview
+        // capsule, and the ring/icon layers all dissolve together — material
+        // views don't fade reliably through a sublayer opacity animation.
+        fadeGeneration += 1
+        let gen = fadeGeneration
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = duration
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self, self.fadeGeneration == gen else { return }
+            self.panel.orderOut(nil)
+        })
     }
 }
 

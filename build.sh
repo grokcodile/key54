@@ -33,7 +33,10 @@ if [ -f "AppIcon.icns" ]; then
     cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
 fi
 
+# Explicit deployment target: keeps the binary runnable on macOS 13+ even when
+# built with a newer SDK (Liquid Glass APIs are weak-linked and runtime-gated).
 swiftc -O main.swift \
+    -target "$(uname -m)-apple-macos13.0" \
     -framework Cocoa \
     -framework ServiceManagement \
     -o "${BUILD_DIR}/Contents/MacOS/${APP_NAME}"
