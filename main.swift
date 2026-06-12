@@ -160,10 +160,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Event tap
 
     private var holdTimer: Timer?
-    /// Which preset is active (0 = Instant … 3 = Long). Defaults to Medium.
+    /// Which preset is active (0 = Instant … 4 = Custom). Defaults to Medium.
     var selectedPreset: Int {
-        get { max(0, min(3, UserDefaults.standard.object(forKey: "presetIndex") as? Int ?? 2)) }
+        get { max(0, min(4, UserDefaults.standard.object(forKey: "presetIndex") as? Int ?? 2)) }
         set { UserDefaults.standard.set(newValue, forKey: "presetIndex") }
+    }
+
+    // The Custom preset's two values (seeded from whichever preset the user
+    // moved to Custom from).
+    var customBuffer: TimeInterval {
+        get { UserDefaults.standard.object(forKey: "customBuffer") as? Double ?? 0.5 }
+        set { UserDefaults.standard.set(newValue, forKey: "customBuffer") }
+    }
+    var customCharge: TimeInterval {
+        get { UserDefaults.standard.object(forKey: "customCharge") as? Double ?? 0.4 }
+        set { UserDefaults.standard.set(newValue, forKey: "customCharge") }
+    }
+
+    /// Seed Custom from a preset the first time Custom is ever selected, so
+    /// it starts as "tweak what I had". After that Custom always remembers
+    /// its own values.
+    func seedCustomIfNeeded(fromPreset idx: Int) {
+        guard UserDefaults.standard.object(forKey: "customBuffer") == nil else { return }
+        customBuffer = SettingsWindow.bufferValues[idx]
+        customCharge = SettingsWindow.durationValues[idx]
+    }
+
+    /// Effective dead-zone / charge for the active preset.
+    var activeBuffer: TimeInterval {
+        selectedPreset == 4 ? customBuffer : SettingsWindow.bufferValues[selectedPreset]
+    }
+    var activeCharge: TimeInterval {
+        selectedPreset == 4 ? customCharge : SettingsWindow.durationValues[selectedPreset]
     }
 
     private func startEventTap() {
@@ -220,7 +248,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Per-preset dead-zone buffer. Only if right-⌘ is still held past it do
         // we engage and start the charge countdown, so a quick tap or chord
         // isn't hijacked. (Instant's buffer is 0 — it triggers immediately.)
-        let buffer = SettingsWindow.bufferValues[selectedPreset]
+        let buffer = activeBuffer
         bufferTimer = Timer.scheduledTimer(withTimeInterval: buffer, repeats: false) { [weak self] _ in
             self?.bufferTimer = nil
             self?.arm()
@@ -229,15 +257,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Engaged after the buffer: show the ring's charge sweep, then fire + toggle.
     private func arm() {
-        let stop = selectedPreset
-        let charge = SettingsWindow.durationValues[stop]
-        // Short has no charge sweep, so give its dissolve extra time —
-        // at the normal fade the icon just flashes.
-        let fade = stop == 1 ? 0.6 : SettingsWindow.fadeConstant
+        let charge = activeCharge
+        // A zero charge means no ring sweep, so give the dissolve extra
+        // time — at the normal fade the icon just flashes.
+        let fade = charge <= 0 ? 0.6 : SettingsWindow.fadeConstant
         let swell = SettingsWindow.swellConstant
 
-        // "Instant": no HUD, no ceremony — switch the moment the key is held.
-        if stop == 0 {
+        // No dead-zone and no charge (Instant, or Custom dialed to zero):
+        // no HUD, no ceremony — switch the moment the key is held.
+        if charge <= 0, activeBuffer <= 0 {
             toggleApp()
             return
         }
@@ -302,12 +330,15 @@ class SettingsWindow: NSWindow {
     // Hold-duration presets. Each stop has its own dead-zone buffer and charge
     // sweep (how long the ring fills); the dissolve and swell are constant. The
     // full trigger time is buffer + charge. "Instant" skips the animation
-    // entirely and switches the moment the key is held.
-    static let durationLabels = ["Instant", "Short", "Medium", "Long"]
+    // entirely and switches the moment the key is held. "Custom" (the fifth
+    // stop) reads its two values from defaults instead of these tables.
+    static let durationLabels = ["Instant", "Short", "Medium", "Long", "Custom"]
     static let bufferValues:   [TimeInterval] = [0.0, 0.5, 0.5, 0.7]   // pre-buffer dead-zone
     static let durationValues: [TimeInterval] = [0.0, 0.0, 0.4, 0.6]   // charge sweep
     static let fadeConstant: TimeInterval = 0.4                        // dissolve
     static let swellConstant: CGFloat = 1.12                           // gel-release expansion
+    static let customMax: TimeInterval = 1.5    // ceiling for each Custom slider
+    static let customStep: TimeInterval = 0.05  // Custom slider snap increment
 
     init(delegate: AppDelegate) {
         self.appDelegate = delegate
@@ -337,17 +368,36 @@ class SettingsWindow: NSWindow {
 
     private func rebuild() {
         let needsBanner = !AXIsProcessTrusted()
+        let showsCustom = appDelegate?.selectedPreset == 4
         let innerW = contentW - pad * 2
+
+        // Intro text — built first so the layout can size to the measured text.
+        let descW: CGFloat = 350
+        let descPara = NSMutableParagraphStyle()
+        descPara.alignment = .center
+        descPara.paragraphSpacing = 10
+        descPara.lineBreakMode = .byWordWrapping
+        let descStr = NSAttributedString(
+            string: "Hold the Command (⌘) key on the right side of your keyboard to summon the application below—hold it again to return to whatever you were doing.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: descPara,
+            ])
+        let descH = ceil(descStr.boundingRect(
+            with: NSSize(width: descW, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]).height) + 2
 
         // Fixed vertical metrics (top → bottom). The content view runs under
         // the transparent titlebar, so the top margin includes its height.
         let topMargin: CGFloat = 56
         let titleH: CGFloat = 36
-        let descH: CGFloat = 92
         let chooseH: CGFloat = 32
         let sliderBlockH: CGFloat = 68  // caption + slider + tick labels
-        let bottomBarH: CGFloat = 86    // Quit / Done row + coffee link + bottom margin
-        let g: CGFloat = 16             // generic gap
+        let customBlockH: CGFloat = showsCustom ? 132 : 0   // Custom timing sub-panel
+        let bottomBarH: CGFloat = 96    // Quit / Done row + coffee link + bottom margin
+        let unitGap: CGFloat = 10       // within a unit (title ↔ description)
+        let sectionGap: CGFloat = 28    // between sections — the layout's rhythm
 
         // App-selection box (icon + name + change button) metrics
         let iconH: CGFloat = 48
@@ -358,8 +408,9 @@ class SettingsWindow: NSWindow {
         let appBoxH = boxPadV + iconH + iconNameGap + nameH + nameButtonGap + chooseH + boxPadV
 
         let bannerBlock = needsBanner ? (bannerGap + bannerH) : 0
-        let totalH = topMargin + titleH + g + descH + g + appBoxH
-                   + g + sliderBlockH + bannerBlock + g + bottomBarH
+        let totalH = topMargin + titleH + unitGap + descH + sectionGap + appBoxH
+                   + sectionGap + sliderBlockH + customBlockH + bannerBlock
+                   + sectionGap + bottomBarH
 
         setContentSize(NSSize(width: contentW, height: totalH))
 
@@ -413,20 +464,9 @@ class SettingsWindow: NSWindow {
         c.addSubview(titleLabel)
 
         // Description
-        y -= g + descH
-        let descPara = NSMutableParagraphStyle()
-        descPara.alignment = .center
-        descPara.paragraphSpacing = 10
-        descPara.lineBreakMode = .byWordWrapping
-        let descStr = NSAttributedString(
-            string: "Hold the Command (⌘) key on the right side of\u{2028}the keyboard to summon the application below.\nHold it again to return to what you were doing.",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: descPara,
-            ])
+        y -= unitGap + descH
         let desc = NSTextField(labelWithAttributedString: descStr)
-        desc.frame = NSRect(x: pad, y: y, width: innerW, height: descH)
+        desc.frame = NSRect(x: (contentW - descW) / 2, y: y, width: descW, height: descH)
         desc.alignment = .center
         desc.usesSingleLineMode = false
         desc.cell?.wraps = true
@@ -434,7 +474,7 @@ class SettingsWindow: NSWindow {
         c.addSubview(desc)
 
         // App-selection section — icon + name + change button inside a gray box
-        y -= g + appBoxH
+        y -= sectionGap + appBoxH
         let boxW: CGFloat = 320
         let boxX = (contentW - boxW) / 2
 
@@ -469,8 +509,8 @@ class SettingsWindow: NSWindow {
         chooseBtn.frame = NSRect(x: boxX + (boxW - chooseW) / 2, y: y + boxPadV, width: chooseW, height: chooseH)
         c.addSubview(chooseBtn)
 
-        // Hold-duration: four discrete stops (Instant / Short / Medium / Long).
-        y -= g + sliderBlockH
+        // Hold-duration: five discrete stops (Instant … Custom).
+        y -= sectionGap + sliderBlockH
         let caption = NSTextField(labelWithString: "Hold Duration")
         caption.frame = NSRect(x: pad, y: y + sliderBlockH - 20, width: innerW, height: 18)
         caption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
@@ -508,9 +548,38 @@ class SettingsWindow: NSWindow {
             c.addSubview(lbl)
         }
 
-        // Bottom bar: Quit (secondary, left) + Done (primary, right)
+        // Custom preset: an inset sub-panel — an outlined box holding the
+        // dead-zone + charge sliders with live readouts.
+        if showsCustom {
+            y -= customBlockH
+
+            let cBoxW: CGFloat = 360
+            let cBoxX = (contentW - cBoxW) / 2
+            let cBoxH: CGFloat = 116
+            let cBoxTop = y + customBlockH - 16   // gap below the tick labels
+
+            let box = NSBox(frame: NSRect(x: cBoxX, y: cBoxTop - cBoxH, width: cBoxW, height: cBoxH))
+            box.boxType = .custom
+            box.fillColor = NSColor(white: 0.5, alpha: 0.12)
+            box.borderColor = .separatorColor
+            box.borderWidth = 1
+            box.cornerRadius = 10
+            box.titlePosition = .noTitle
+            c.addSubview(box)
+
+            let row1 = cBoxTop - 14
+            addCustomRow(to: c, top: row1, title: "Dead-zone",
+                         value: appDelegate?.customBuffer ?? 0.5,
+                         sliderTag: 21, labelTag: 23)
+            addCustomRow(to: c, top: row1 - 48, title: "Charge",
+                         value: appDelegate?.customCharge ?? 0.4,
+                         sliderTag: 22, labelTag: 24)
+        }
+
+        // Bottom bar: Quit (secondary, left) + Done (primary, right), with the
+        // coffee link as its own quieter unit below.
         let btnW: CGFloat = 100
-        let barY: CGFloat = 46
+        let barY: CGFloat = 56
         let quitBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
         quitBtn.frame = NSRect(x: pad, y: barY, width: btnW, height: 32)
         quitBtn.bezelStyle = .rounded
@@ -572,8 +641,65 @@ class SettingsWindow: NSWindow {
 
     @objc private func sliderChanged(_ sender: NSSlider) {
         let idx = max(0, min(Self.durationLabels.count - 1, Int(sender.doubleValue.rounded())))
-        appDelegate?.selectedPreset = idx
+        guard let appDelegate, idx != appDelegate.selectedPreset else { return }
+        let old = appDelegate.selectedPreset
+        // First-ever visit to Custom seeds from the preset being left;
+        // afterwards Custom keeps its own remembered values.
+        if idx == 4, old < 4 { appDelegate.seedCustomIfNeeded(fromPreset: old) }
+        appDelegate.selectedPreset = idx
+        // The Custom rows appear/disappear with the selection. Rebuild after
+        // the slider finishes tracking — tearing it down mid-drag confuses
+        // AppKit.
+        if (idx == 4) != (old == 4) {
+            DispatchQueue.main.async { [weak self] in
+                self?.rebuild()
+                self?.center()
+            }
+        }
     }
+
+    /// One labeled slider row of the Custom preset editor.
+    private func addCustomRow(to c: NSView, top: CGFloat, title: String,
+                              value: TimeInterval, sliderTag: Int, labelTag: Int) {
+        let sliderW: CGFloat = 320
+        let x = (contentW - sliderW) / 2
+
+        let caption = NSTextField(labelWithString: title)
+        caption.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
+        caption.textColor = .secondaryLabelColor
+        caption.frame = NSRect(x: x, y: top - 16, width: 180, height: 16)
+        c.addSubview(caption)
+
+        let readout = NSTextField(labelWithString: Self.fmt(value))
+        readout.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize - 1,
+                                                  weight: .regular)
+        readout.textColor = .secondaryLabelColor
+        readout.alignment = .right
+        readout.frame = NSRect(x: x + sliderW - 80, y: top - 16, width: 80, height: 16)
+        readout.tag = labelTag
+        c.addSubview(readout)
+
+        let slider = NSSlider(value: value, minValue: 0, maxValue: Self.customMax,
+                              target: self, action: #selector(customSliderChanged(_:)))
+        slider.frame = NSRect(x: x, y: top - 40, width: sliderW, height: 22)
+        slider.tag = sliderTag
+        c.addSubview(slider)
+    }
+
+    @objc private func customSliderChanged(_ sender: NSSlider) {
+        // Continuous drag, snapped to the step so values read cleanly.
+        let snapped = (sender.doubleValue / Self.customStep).rounded() * Self.customStep
+        sender.doubleValue = snapped
+        if sender.tag == 21 {
+            appDelegate?.customBuffer = snapped
+            (contentView?.viewWithTag(23) as? NSTextField)?.stringValue = Self.fmt(snapped)
+        } else {
+            appDelegate?.customCharge = snapped
+            (contentView?.viewWithTag(24) as? NSTextField)?.stringValue = Self.fmt(snapped)
+        }
+    }
+
+    private static func fmt(_ v: TimeInterval) -> String { String(format: "%.2f s", v) }
 
     @objc private func chooseApp() {
         let panel = NSOpenPanel()
