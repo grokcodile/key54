@@ -33,7 +33,7 @@ Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
 ## Features
 
 - Hold right-⌘ to toggle a single chosen app in and out of focus.
-- Works with **any** application, not just terminals.
+- Works with **any** application of your choice.
 - **Hold-duration presets** (Instant / Short / Medium / Long) with a built-in dead-zone, so a quick press or normal right-⌘ shortcut is never hijacked. **Instant** skips the animation entirely and switches the moment you press.
 - A subtle **charge animation** — the chosen app's icon in a glowing ring on a Liquid Glass bezel (macOS 26+; frosted glass on older systems) — plays as you hold and dissolves as it switches. The ring follows your accent color.
 - Correctly returns you to the previous app — including full-screen apps and apps with no open windows.
