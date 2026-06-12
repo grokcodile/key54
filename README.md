@@ -34,10 +34,21 @@ Open the `.dmg` and drag **Trapdoor** into your `Applications` folder.
 
 - Hold right-⌘ to toggle a single chosen app in and out of focus.
 - Works with **any** application, not just terminals.
-- **Hold-duration presets** (None / Instant / Short / Medium / Long) with a built-in dead-zone, so a quick press or normal right-⌘ shortcut is never hijacked. **None** skips the animation entirely and switches the moment you press.
-- A subtle **charge animation** — the chosen app's icon in a glowing ring on a Liquid Glass bezel (macOS 26+; frosted glass on older systems) — plays as you hold and dissolves as it switches. The ring follows your accent color. Preview any preset right from the settings window.
+- **Hold-duration presets** (Instant / Short / Medium / Long) with a built-in dead-zone, so a quick press or normal right-⌘ shortcut is never hijacked. **Instant** skips the animation entirely and switches the moment you press.
+- A subtle **charge animation** — the chosen app's icon in a glowing ring on a Liquid Glass bezel (macOS 26+; frosted glass on older systems) — plays as you hold and dissolves as it switches. The ring follows your accent color.
 - Correctly returns you to the previous app — including full-screen apps and apps with no open windows.
 - Runs silently as a background agent (no Dock icon, no menu bar), and starts at login.
+
+## Hold Duration
+
+The slider in settings controls how long you hold the right ⌘ key before the switch fires — and how much ceremony comes with it. Every stop past Instant starts with a *dead-zone* (nothing appears yet, and letting go does nothing), followed by a charge ring you can watch fill. Release any time before the ring completes and the switch is cancelled.
+
+| Preset | Hold to trigger | Behavior |
+| --- | --- | --- |
+| **Instant** | A press — no hold | Completely hands the right ⌘ key to Trapdoor: no hold, no delay, no animation — the moment you press, you've switched. Quick taps and right-⌘ shortcuts trigger it too, so pick this only if you're dedicating the key. |
+| **Short** | ~0.5 s | A snappy switch that still leaves normal right-⌘ shortcuts usable — anything shorter than the half-second dead-zone is ignored. No charge ring; the app's icon simply appears and dissolves into the switch. |
+| **Medium** *(default)* | ~0.9 s (0.5 s dead-zone + 0.4 s charge) | The best mix: enough delay to cancel the switch early just by letting go, a smooth transition that supports a more graceful mental shift between tasks, and still quick and responsive. |
+| **Long** | ~1.3 s (0.7 s dead-zone + 0.6 s charge) | An even more generous, deliberate task-switching experience — maximum time to watch the ring fill and change your mind. |
 
 ## Usage Examples
 
@@ -74,7 +85,7 @@ This compiles `main.swift`, generates the app icon from `trapdoor_icon.png`, ad-
 1. Launch **Trapdoor** from `Applications`. Its window opens.
 2. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Trapdoor. This lets it detect the right Command key.
 3. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
-4. Optionally pick a **Hold Duration** preset (how long you hold before it triggers). Hold the right ⌘ key with the window focused to preview the animation.
+4. Optionally pick a **Hold Duration** preset (how long you hold before it triggers).
 5. Click **Done**. Trapdoor keeps running in the background (and starts automatically at login).
 
 To change the app or settings later, just open Trapdoor again from `Applications`.
