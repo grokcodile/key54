@@ -20,6 +20,11 @@ if ! cp -R "${BUILD_DIR}" "${APP_DIR}" 2>/dev/null; then
     sudo cp -R "${BUILD_DIR}" "${APP_DIR}"
 fi
 
+# Refresh the README's settings screenshot from the freshly installed app.
+# Local only — the CI release build never runs install.sh. Non-fatal.
+echo "Updating settings screenshot..."
+bash screenshot.sh || true
+
 echo "Launching ${APP_NAME}..."
 sleep 1
 open "${APP_DIR}"

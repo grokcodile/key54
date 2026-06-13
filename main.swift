@@ -23,6 +23,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // `--screenshot <path>`: render the settings window over a fixed
+        // neutral backdrop, capture it, write the PNG, and quit. Used by
+        // install.sh to keep the README screenshot current. Skips all the
+        // normal agent setup (no event tap, no login item).
+        if let i = CommandLine.arguments.firstIndex(of: "--screenshot") {
+            let path = i + 1 < CommandLine.arguments.count
+                ? CommandLine.arguments[i + 1] : "screenshots/settings.png"
+            captureSettingsScreenshot(to: path)
+            return
+        }
+
         NSApp.setActivationPolicy(.accessory)
 
         if SMAppService.mainApp.status != .enabled {
@@ -49,6 +60,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.updateAppDisplay()
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - Screenshot capture (--screenshot)
+
+    /// Show the settings window, capture just the window — transparent outside
+    /// its rounded corners, no drop shadow, no background — write a PNG to
+    /// `path`, and quit. Driven by the standalone screenshot.sh.
+    private func captureSettingsScreenshot(to path: String) {
+        NSApp.setActivationPolicy(.regular)
+        SettingsWindow.screenshotMode = true
+
+        let win = SettingsWindow(delegate: self)
+        settingsWindow = win
+        win.updateAppDisplay()
+        win.hasShadow = false
+        NSApp.activate(ignoringOtherApps: true)
+        win.center()
+        win.makeKeyAndOrderFront(nil)
+
+        // Let the window server composite before capturing.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.writeSettingsCapture(of: win, to: path)
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func writeSettingsCapture(of win: NSWindow, to path: String) {
+        // .boundsIgnoreFraming → just the window rect, no shadow; the rounded
+        // corners and anything outside the window stay transparent.
+        guard let shot = CGWindowListCreateImage(
+            .null, .optionIncludingWindow, CGWindowID(win.windowNumber), .boundsIgnoreFraming) else {
+            fputs("screenshot: capture failed — grant Screen Recording permission " +
+                  "to Cmd54 in System Settings → Privacy & Security.\n", stderr)
+            return
+        }
+        guard let data = NSBitmapImageRep(cgImage: shot).representation(using: .png, properties: [:]) else { return }
+        do {
+            try data.write(to: URL(fileURLWithPath: path))
+            print("wrote \(path)")
+        } catch {
+            fputs("screenshot: could not write \(path): \(error)\n", stderr)
+        }
     }
 
     // MARK: - App tracking
@@ -344,6 +397,9 @@ class SettingsWindow: NSWindow {
     // full trigger time is buffer + charge. "Instant" skips the animation
     // entirely and switches the moment the key is held. "Custom" (the fifth
     // stop) reads its two values from defaults instead of these tables.
+    /// Set during `--screenshot` capture so the window renders in its normal
+    /// state (the AX-permission banner is suppressed).
+    static var screenshotMode = false
     static let durationLabels = ["Instant", "Short", "Medium", "Long", "Custom"]
     static let bufferValues:   [TimeInterval] = [0.0, 0.5, 0.5, 0.7]   // pre-buffer dead-zone
     static let durationValues: [TimeInterval] = [0.0, 0.0, 0.4, 0.6]   // charge sweep
@@ -379,7 +435,7 @@ class SettingsWindow: NSWindow {
     // MARK: - Layout
 
     private func rebuild() {
-        let needsBanner = !AXIsProcessTrusted()
+        let needsBanner = !AXIsProcessTrusted() && !Self.screenshotMode
         let showsCustom = appDelegate?.selectedPreset == 4
         let innerW = contentW - pad * 2
 
