@@ -1,4 +1,4 @@
-![Cmd54 icon](screenshots/icon_readme.png)
+<img src="screenshots/icon_readme.png" width="128" alt="Cmd54 icon">
 
 # Cmd54
 
