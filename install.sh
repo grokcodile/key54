@@ -1,10 +1,10 @@
 #!/bin/bash
-# Builds Trapdoor and installs it to /Applications, then launches it.
+# Builds Cmd54 and installs it to /Applications, then launches it.
 set -e
 
 cd "$(dirname "$0")"
 
-APP_NAME="Trapdoor"
+APP_NAME="Cmd54"
 APP_DIR="/Applications/${APP_NAME}.app"
 BUILD_DIR="./build/${APP_NAME}.app"
 
@@ -27,7 +27,7 @@ open "${APP_DIR}"
 cat <<EOF
 
 Done. On first run, macOS will prompt for Accessibility permission.
-Go to: System Settings → Privacy & Security → Accessibility → enable Trapdoor.
+Go to: System Settings → Privacy & Security → Accessibility → enable Cmd54.
 
 Once granted, hold the right Command key anywhere to toggle your app.
 The app runs silently in the background with no dock icon or menu bar.

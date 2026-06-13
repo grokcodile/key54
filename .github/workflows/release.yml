@@ -49,10 +49,10 @@ jobs:
       - name: Package DMG
         run: |
           mkdir -p dist/dmgroot
-          cp -R "build/Trapdoor.app" dist/dmgroot/
+          cp -R "build/Cmd54.app" dist/dmgroot/
           ln -s /Applications dist/dmgroot/Applications
-          hdiutil create -volname "Trapdoor" -srcfolder dist/dmgroot \
-            -ov -format UDZO "dist/Trapdoor.dmg"
+          hdiutil create -volname "Cmd54" -srcfolder dist/dmgroot \
+            -ov -format UDZO "dist/Cmd54.dmg"
 
       - name: Notarize & staple
         if: env.HAS_NOTARY == 'true'
@@ -62,15 +62,15 @@ jobs:
           AC_API_KEY_BASE64: ${{ secrets.AC_API_KEY_BASE64 }}
         run: |
           echo "$AC_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/key.p8"
-          xcrun notarytool submit "dist/Trapdoor.dmg" \
+          xcrun notarytool submit "dist/Cmd54.dmg" \
             --key "$RUNNER_TEMP/key.p8" \
             --key-id "$AC_API_KEY_ID" \
             --issuer "$AC_API_ISSUER_ID" \
             --wait
-          xcrun stapler staple "dist/Trapdoor.dmg"
+          xcrun stapler staple "dist/Cmd54.dmg"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Trapdoor.dmg
+          files: dist/Cmd54.dmg
           generate_release_notes: true

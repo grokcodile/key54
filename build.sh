@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Trapdoor.app into ./build. Used by both install.sh and CI.
+# Builds Cmd54.app into ./build. Used by both install.sh and CI.
 #
 # Optional code-signing: set SIGN_IDENTITY to a "Developer ID Application: …"
 # identity to sign for distribution; otherwise an ad-hoc signature is used.
@@ -7,9 +7,9 @@ set -e
 
 cd "$(dirname "$0")"
 
-APP_NAME="Trapdoor"
+APP_NAME="Cmd54"
 BUILD_DIR="./build/${APP_NAME}.app"
-SRC_ICON="trapdoor_icon.png"
+SRC_ICON="cmd54_icon.png"
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"
 
 echo "Building ${APP_NAME}..."
@@ -46,7 +46,7 @@ cp Info.plist "${BUILD_DIR}/Contents/Info.plist"
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "Signing with: ${SIGN_IDENTITY}"
     codesign --force --options runtime --timestamp \
-        --entitlements Trapdoor.entitlements \
+        --entitlements Cmd54.entitlements \
         --sign "$SIGN_IDENTITY" "${BUILD_DIR}"
 else
     codesign --force --deep --sign - "${BUILD_DIR}"

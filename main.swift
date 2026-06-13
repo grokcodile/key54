@@ -61,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard bundleID != resolvedBundleID() else { return }
         if bundleID == Bundle.main.bundleIdentifier {
             // Track ourselves only while the settings window is open, so
-            // trapdooring out of Settings trapdoors back to it. Background
+            // summoning out of Settings returns to it. Background
             // activations with no window never claim the "previous" slot.
             if settingsWindow?.isVisible == true { previousApp = app }
         } else {
@@ -69,7 +69,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Called when the settings window closes: returning to Trapdoor only
+    /// Called when the settings window closes: returning to Cmd54 only
     /// makes sense while the window is up, so forget it as the previous app.
     func settingsClosed() {
         if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier {
@@ -469,7 +469,7 @@ class SettingsWindow: NSWindow {
 
         // Title
         y -= titleH
-        let titleLabel = NSTextField(labelWithString: "Trapdoor")
+        let titleLabel = NSTextField(labelWithString: "Cmd54")
         titleLabel.frame = NSRect(x: pad, y: y, width: innerW, height: titleH)
         titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         titleLabel.alignment = .center
@@ -622,7 +622,7 @@ class SettingsWindow: NSWindow {
         coffeeBtn.sizeToFit()
         coffeeBtn.frame = NSRect(x: (contentW - coffeeBtn.frame.width) / 2, y: 16,
                                  width: coffeeBtn.frame.width, height: 20)
-        coffeeBtn.toolTip = "Support Trapdoor on Ko-fi"
+        coffeeBtn.toolTip = "Support Cmd54 on Ko-fi"
         c.addSubview(coffeeBtn)
 
         contentView = c
@@ -1075,7 +1075,7 @@ let mainMenu = NSMenu()
 let appMenuItem = NSMenuItem()
 mainMenu.addItem(appMenuItem)
 let appMenu = NSMenu()
-appMenu.addItem(withTitle: "Quit Trapdoor", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+appMenu.addItem(withTitle: "Quit Cmd54", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 appMenuItem.submenu = appMenu
 app.mainMenu = mainMenu
 
