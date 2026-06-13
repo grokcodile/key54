@@ -77,7 +77,7 @@ The slider in settings controls how long you hold the right ⌘ key before the s
 bash install.sh
 ```
 
-This compiles `main.swift`, generates the app icon from `cmd54_icon.png`, ad-hoc code-signs, installs to `/Applications/Cmd54.app`, and launches it. On first run, grant Accessibility permission when prompted.
+This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc code-signs, installs to `/Applications/Cmd54.app`, and launches it. On first run, grant Accessibility permission when prompted.
 
 > Optional: install [`pngquant`](https://pngquant.org) to shrink the generated icon.
 

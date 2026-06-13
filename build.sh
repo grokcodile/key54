@@ -9,7 +9,6 @@ cd "$(dirname "$0")"
 
 APP_NAME="Cmd54"
 BUILD_DIR="./build/${APP_NAME}.app"
-SRC_ICON="cmd54_icon.png"
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"
 
 echo "Building ${APP_NAME}..."
@@ -18,20 +17,17 @@ rm -rf ./build
 mkdir -p "${BUILD_DIR}/Contents/MacOS"
 mkdir -p "${BUILD_DIR}/Contents/Resources"
 
-# Icon — regenerate from source PNG (Core Graphics resize, preserves alpha)
-if [ -f "$SRC_ICON" ]; then
-    rm -rf AppIcon.iconset
-    swift make_iconset.swift "$SRC_ICON" AppIcon.iconset
-    # Lossy-quantize the PNGs to shrink the final .icns (iconutil re-encodes,
-    # so only reduced color complexity survives — lossless passes don't help).
-    if command -v pngquant >/dev/null 2>&1; then
-        pngquant --quality=70-95 --speed 1 --ext .png --force AppIcon.iconset/*.png || true
-    fi
-    iconutil -c icns AppIcon.iconset -o AppIcon.icns
+# Icon — generate the full iconset (and README icon) from make_icon.swift,
+# then quantize + pack into .icns.
+rm -rf AppIcon.iconset
+swift make_icon.swift AppIcon.iconset
+# Lossy-quantize the PNGs to shrink the final .icns (iconutil re-encodes,
+# so only reduced color complexity survives — lossless passes don't help).
+if command -v pngquant >/dev/null 2>&1; then
+    pngquant --quality=70-95 --speed 1 --ext .png --force AppIcon.iconset/*.png || true
 fi
-if [ -f "AppIcon.icns" ]; then
-    cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
-fi
+iconutil -c icns AppIcon.iconset -o AppIcon.icns
+cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
 
 # Explicit deployment target: keeps the binary runnable on macOS 13+ even when
 # built with a newer SDK (Liquid Glass APIs are weak-linked and runtime-gated).
