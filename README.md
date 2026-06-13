@@ -10,12 +10,9 @@ There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, an
 
 It's fast, tiny (2.3 MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
 
-## Screenshots
+## Screenshot
 
-<p>
-  <img src="screenshots/settings.png?v=3" width="49%" alt="Cmd54 settings window">
-  <img src="screenshots/settings-custom.png" width="49%" alt="Cmd54 settings window with the Custom timing panel open">
-</p>
+![Cmd54 settings window](screenshots/settings.png?v=4)
 
 ## Download
 
