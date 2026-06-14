@@ -154,9 +154,9 @@ you to the one place you care about, then loop you right back.
 
 This app uses a global event tap and controls other applications, which is incompatible with the Mac App Store sandbox — it's distributed directly (Developer ID + notarization, or built from source).
 
-## Support
+## Tip Jar
 
-Key54 is free and open source. If it makes your work a little better, you can support its development:
+Key54 is free and open source. If it earns a spot on your Mac, please support its development:
 
 - ☕ [Buy me a coffee on Ko-fi](https://ko-fi.com/grokcodile)
 - ❤️ [Sponsor me on GitHub](https://github.com/sponsors/grokcodile)
