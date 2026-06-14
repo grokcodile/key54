@@ -95,10 +95,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   "to Cmd54 in System Settings → Privacy & Security.\n", stderr)
             return
         }
-        guard let data = NSBitmapImageRep(cgImage: shot).representation(using: .png, properties: [:]) else { return }
+        // The capture is in Retina pixels; downsample to the window's logical
+        // (1x) size so the PNG matches the on-screen dimensions.
+        let scale = win.backingScaleFactor
+        let w = Int((CGFloat(shot.width) / scale).rounded())
+        let h = Int((CGFloat(shot.height) / scale).rounded())
+        var image = shot
+        if scale != 1, w > 0, h > 0,
+           let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                               bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+            ctx.interpolationQuality = .high
+            ctx.draw(shot, in: CGRect(x: 0, y: 0, width: w, height: h))
+            image = ctx.makeImage() ?? shot
+        }
+        guard let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return }
         do {
             try data.write(to: URL(fileURLWithPath: path))
-            print("wrote \(path)")
+            print("wrote \(path) (\(image.width)×\(image.height))")
         } catch {
             fputs("screenshot: could not write \(path): \(error)\n", stderr)
         }

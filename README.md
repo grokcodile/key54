@@ -12,7 +12,7 @@ It's fast, tiny (2.3 MB), uses almost zero system resources, and stays out of th
 
 ## Screenshot
 
-<img src="screenshots/settings.png?v=4" width="460" alt="Cmd54 settings window">
+![Cmd54 settings window](screenshots/settings.png?v=5)
 
 ## Download
 
