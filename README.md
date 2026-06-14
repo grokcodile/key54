@@ -8,6 +8,8 @@ Cmd54 isn't another app library switcher, launcher, or palette. It doesn't try t
 
 There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, and no chords. You pick the app once; after that it's pure muscle memory — like a push-to-talk button for your terminal, notes, browser, or chat. It claims the otherwise-dead *gesture* of holding the right ⌘ key, so quick taps and normal right-⌘ shortcuts keep working exactly as before (unless you opt into the Instant preset) — you give up nothing.
 
+And it's calm by design. Instead of racing to ⌘-Tab across your desktop and back, you hold the key and it charges for a beat before it fires — a small, deliberate pause that lets your brain settle into the switch (dial it to Instant if you'd rather skip it). One key, one app, no chord to remember: a context switch that gives you a moment to breathe.
+
 It's fast, tiny (2.3 MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
 
 ## Screenshot
@@ -33,6 +35,7 @@ Open the `.dmg` and drag **Cmd54** into your `Applications` folder.
 ## Features
 
 - Hold right-⌘ to toggle a single chosen app in and out of focus.
+- **One key, held — no chord.** No ⌘-key combination, no rapid tapping, no sequence to remember; just hold one key. Pure muscle memory, and a gentler reach than ⌘-Space or ⌘-Tab (see [Accessibility](#accessibility)).
 - Works with **any** application of your choice.
 - **Hold-duration presets** (Instant / Short / Medium / Long / Custom) with a built-in dead-zone, so a quick press or normal right-⌘ shortcut is never hijacked. **Instant** skips the animation entirely and switches the moment you press; **Custom** lets you tune the timings yourself.
 - A subtle **charge animation** — the chosen app's icon in a glowing ring on a Liquid Glass bezel (macOS 26+; frosted glass on older systems) — plays as you hold and dissolves as it switches. The ring follows the accent color you've chosen in System Settings.
@@ -52,6 +55,12 @@ Pick the one app you're *always* dropping into and back out of, bind it with Cmd
 - **Manager** — bind your email or chat client (Mail, Messages, Slack). Glance at a message and reply, then drop straight back into focus — without getting sucked in and losing the thread of deeper work.
 
 Whatever you assign as your **Cmd54**, the pattern is the same: **summon → do the thing → dismiss** — without ever breaking stride or wondering which shortcut to press.
+
+## Accessibility
+
+Cmd54 needs only a **single key, held** — the right ⌘ key on its own, no multi-finger chord, no rapid tapping, no sequence to remember. For anyone who finds combinations like ⌘-Space or ⌘-Tab hard to reach or hold, holding one key to bring an app forward — and holding it again to go back — can be a genuinely simpler way to move between apps.
+
+The timing is forgiving, too: a quick or accidental press does nothing, and you can let go any time before the ring fills to cancel. Cmd54 was built as a convenience, but the same no-chord, no-reach interaction turns out to be an accessibility aid — and honestly, a little easier for everyone.
 
 ## Hold Duration
 
