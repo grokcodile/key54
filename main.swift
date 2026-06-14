@@ -92,7 +92,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let shot = CGWindowListCreateImage(
             .null, .optionIncludingWindow, CGWindowID(win.windowNumber), .boundsIgnoreFraming) else {
             fputs("screenshot: capture failed — grant Screen Recording permission " +
-                  "to Cmd54 in System Settings → Privacy & Security.\n", stderr)
+                  "to Key54 in System Settings → Privacy & Security.\n", stderr)
             return
         }
         // The capture is in Retina pixels; downsample to the window's logical
@@ -136,7 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Called when the settings window closes: returning to Cmd54 only
+    /// Called when the settings window closes: returning to Key54 only
     /// makes sense while the window is up, so forget it as the previous app.
     func settingsClosed() {
         if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier {
@@ -539,7 +539,7 @@ class SettingsWindow: NSWindow {
 
         // Title
         y -= titleH
-        let titleLabel = NSTextField(labelWithString: "Cmd54")
+        let titleLabel = NSTextField(labelWithString: "Key54")
         titleLabel.frame = NSRect(x: pad, y: y, width: innerW, height: titleH)
         titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         titleLabel.alignment = .center
@@ -692,7 +692,7 @@ class SettingsWindow: NSWindow {
         coffeeBtn.sizeToFit()
         coffeeBtn.frame = NSRect(x: (contentW - coffeeBtn.frame.width) / 2, y: 16,
                                  width: coffeeBtn.frame.width, height: 20)
-        coffeeBtn.toolTip = "Support Cmd54 on Ko-fi"
+        coffeeBtn.toolTip = "Support Key54 on Ko-fi"
         c.addSubview(coffeeBtn)
 
         contentView = c
@@ -1145,7 +1145,7 @@ let mainMenu = NSMenu()
 let appMenuItem = NSMenuItem()
 mainMenu.addItem(appMenuItem)
 let appMenu = NSMenu()
-appMenu.addItem(withTitle: "Quit Cmd54", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+appMenu.addItem(withTitle: "Quit Key54", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 appMenuItem.submenu = appMenu
 app.mainMenu = mainMenu
 

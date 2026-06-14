@@ -11,7 +11,7 @@
 set -e
 
 cd "$(dirname "$0")"
-APP_NAME="Cmd54"
+APP_NAME="Key54"
 OUT="$(pwd)/screenshots/settings.png"
 
 APP="/Applications/${APP_NAME}.app"

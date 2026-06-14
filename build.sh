@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Cmd54.app into ./build. Used by both install.sh and CI.
+# Builds Key54.app into ./build. Used by both install.sh and CI.
 #
 # Optional code-signing: set SIGN_IDENTITY to a "Developer ID Application: …"
 # identity to sign for distribution; otherwise an ad-hoc signature is used.
@@ -7,7 +7,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-APP_NAME="Cmd54"
+APP_NAME="Key54"
 BUILD_DIR="./build/${APP_NAME}.app"
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"
 
@@ -42,7 +42,7 @@ cp Info.plist "${BUILD_DIR}/Contents/Info.plist"
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "Signing with: ${SIGN_IDENTITY}"
     codesign --force --options runtime --timestamp \
-        --entitlements Cmd54.entitlements \
+        --entitlements Key54.entitlements \
         --sign "$SIGN_IDENTITY" "${BUILD_DIR}"
 else
     codesign --force --deep --sign - "${BUILD_DIR}"
