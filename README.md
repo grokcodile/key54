@@ -34,6 +34,10 @@ Open the `.dmg` and drag **Key54** into your `Applications` folder.
 >
 > Prefer no warning at all? [Build from source](#build) — a locally built app isn't quarantined and just runs.
 
+Key54 is free. If it earns a spot on your keyboard, you can buy me a coffee:
+
+<a href='https://ko-fi.com/grokcodile' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+
 ## Features
 
 - Hold right-⌘ to toggle a single chosen app in and out of focus.
@@ -158,8 +162,8 @@ This app uses a global event tap and controls other applications, which is incom
 
 Key54 is free and open source. If it makes your work a little better, you can support its development:
 
-- ❤️ [GitHub Sponsors](https://github.com/sponsors/grokcodile)
 - ☕ [Ko-fi](https://ko-fi.com/grokcodile)
+- ❤️ [GitHub Sponsors](https://github.com/sponsors/grokcodile)
 
 ## License
 
