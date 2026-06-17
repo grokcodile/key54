@@ -16,7 +16,7 @@ It's fast, tiny (2.3 MB), uses almost zero system resources, and stays out of th
 
 ## Screenshot
 
-![Key54 settings window](screenshots/settings.png?v=7)
+![Key54 settings window](screenshots/settings.png?v=8)
 
 ## Download
 

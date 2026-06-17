@@ -866,7 +866,7 @@ class SettingsWindow: NSWindow {
         let tipW: CGFloat = 34
         // Mirror the traffic lights: the jar's top/right padding matches their
         // top/left padding (≈9 pt each).
-        tipBtn.frame = NSRect(x: contentW - 30, y: totalH - 30, width: tipW, height: 26)
+        tipBtn.frame = NSRect(x: contentW - 34, y: totalH - 30, width: tipW, height: 26)
         tipBtn.toolTip = "Tip Jar"
         c.addSubview(tipBtn)
 
