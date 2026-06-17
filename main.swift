@@ -36,6 +36,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.setActivationPolicy(.accessory)
 
+        // Show tooltips (the bare Tip Jar emoji's hint) after a brief delay,
+        // rather than the long system default.
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 150])
+
         if SMAppService.mainApp.status != .enabled {
             try? SMAppService.mainApp.register()
         }
@@ -245,32 +249,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "presetIndex") }
     }
 
+    /// Animation style (0 = Power Up ring, 1 = Level Up fill). Defaults to Power Up.
+    var animationStyle: Int {
+        get { UserDefaults.standard.integer(forKey: "animationStyle") }
+        set { UserDefaults.standard.set(newValue, forKey: "animationStyle") }
+    }
+
     // The Custom preset's two values (seeded from whichever preset the user
     // moved to Custom from).
-    var customBuffer: TimeInterval {
-        get { UserDefaults.standard.object(forKey: "customBuffer") as? Double ?? 0.5 }
-        set { UserDefaults.standard.set(newValue, forKey: "customBuffer") }
+    var customKeyDelay: TimeInterval {
+        get { UserDefaults.standard.object(forKey: "customKeyDelay") as? Double ?? 0.5 }
+        set { UserDefaults.standard.set(newValue, forKey: "customKeyDelay") }
     }
-    var customCharge: TimeInterval {
-        get { UserDefaults.standard.object(forKey: "customCharge") as? Double ?? 0.4 }
-        set { UserDefaults.standard.set(newValue, forKey: "customCharge") }
+    var customAnimationLength: TimeInterval {
+        get { UserDefaults.standard.object(forKey: "customAnimationLength") as? Double ?? 0.4 }
+        set { UserDefaults.standard.set(newValue, forKey: "customAnimationLength") }
     }
 
     /// Seed Custom from a preset the first time Custom is ever selected, so
     /// it starts as "tweak what I had". After that Custom always remembers
     /// its own values.
     func seedCustomIfNeeded(fromPreset idx: Int) {
-        guard UserDefaults.standard.object(forKey: "customBuffer") == nil else { return }
-        customBuffer = SettingsWindow.bufferValues[idx]
-        customCharge = SettingsWindow.durationValues[idx]
+        guard UserDefaults.standard.object(forKey: "customKeyDelay") == nil else { return }
+        customKeyDelay = SettingsWindow.keyDelayValues[idx]
+        customAnimationLength = SettingsWindow.animationLengthValues[idx]
     }
 
     /// Effective dead-zone / charge for the active preset.
-    var activeBuffer: TimeInterval {
-        selectedPreset == 4 ? customBuffer : SettingsWindow.bufferValues[selectedPreset]
+    var activeKeyDelay: TimeInterval {
+        selectedPreset == 4 ? customKeyDelay : SettingsWindow.keyDelayValues[selectedPreset]
     }
-    var activeCharge: TimeInterval {
-        selectedPreset == 4 ? customCharge : SettingsWindow.durationValues[selectedPreset]
+    var activeAnimationLength: TimeInterval {
+        selectedPreset == 4 ? customAnimationLength : SettingsWindow.animationLengthValues[selectedPreset]
     }
 
     private func startEventTap() {
@@ -327,7 +337,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Per-preset dead-zone buffer. Only if right-⌘ is still held past it do
         // we engage and start the charge countdown, so a quick tap or chord
         // isn't hijacked. (Instant's buffer is 0 — it triggers immediately.)
-        let buffer = activeBuffer
+        let buffer = activeKeyDelay
         bufferTimer = Timer.scheduledTimer(withTimeInterval: buffer, repeats: false) { [weak self] _ in
             self?.bufferTimer = nil
             self?.arm()
@@ -336,7 +346,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Engaged after the buffer: show the ring's charge sweep, then fire + toggle.
     private func arm() {
-        let charge = activeCharge
+        let charge = activeAnimationLength
         // A zero charge means no ring sweep, so give the dissolve extra
         // time — at the normal fade the icon just flashes.
         let fade = charge <= 0 ? 0.6 : SettingsWindow.fadeConstant
@@ -344,7 +354,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // No dead-zone and no charge (Instant, or Custom dialed to zero):
         // no HUD, no ceremony — switch the moment the key is held.
-        if charge <= 0, activeBuffer <= 0 {
+        if charge <= 0, activeKeyDelay <= 0 {
             toggleApp()
             return
         }
@@ -398,9 +408,149 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - Settings Window
 
+/// A borderless button that shows the pointing-hand cursor on hover, so a bare
+/// emoji or text link reads as clickable.
+class LinkButton: NSButton {
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
+/// A flat, pill-shaped button with a translucent white fill that brightens on
+/// hover (and shows the pointing-hand cursor via LinkButton).
+final class HoverButton: LinkButton {
+    private var tracking: NSTrackingArea?
+    private let restColor = NSColor(white: 1, alpha: 0.07).cgColor
+    private let hoverColor = NSColor(white: 1, alpha: 0.20).cgColor
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        isBordered = false
+        wantsLayer = true
+        layer?.cornerRadius = 8
+        layer?.backgroundColor = restColor
+    }
+    required init?(coder: NSCoder) { super.init(coder: coder) }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let t = tracking { removeTrackingArea(t) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+    override func mouseEntered(with event: NSEvent) { layer?.backgroundColor = hoverColor }
+    override func mouseExited(with event: NSEvent) { layer?.backgroundColor = restColor }
+}
+
+/// A small static HUD glyph that represents an Animation Style next to its radio
+/// button: a ¾-filled Power Up ring, or a ¾-filled Level Up glass.
+final class StyleGlyph: NSView {
+    init(levelUp: Bool, size: CGFloat) {
+        super.init(frame: NSRect(x: 0, y: 0, width: size, height: size))
+        wantsLayer = true
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let accent = NSColor.controlAccentColor
+        let radius = size * 0.28
+
+        let tile = CALayer()
+        tile.frame = bounds
+        tile.cornerRadius = radius
+        tile.backgroundColor = NSColor(white: 0.5, alpha: 0.16).cgColor
+        layer?.addSublayer(tile)
+
+        if levelUp {
+            let clip = CALayer()
+            clip.frame = bounds
+            clip.cornerRadius = radius
+            clip.masksToBounds = true
+            layer?.addSublayer(clip)
+            let water = CAShapeLayer()
+            water.path = CGPath(rect: CGRect(x: 0, y: 0, width: size, height: size * 0.65), transform: nil)
+            water.frame = bounds
+            water.fillColor = accent.cgColor
+            water.contentsScale = scale
+            clip.addSublayer(water)
+        } else {
+            let center = CGPoint(x: size / 2, y: size / 2)
+            let arc = CGMutablePath()
+            arc.addArc(center: center, radius: size * 0.30, startAngle: .pi / 2, endAngle: .pi / 2 - .pi * 2, clockwise: true)
+            let track = CAShapeLayer()
+            track.path = arc
+            track.fillColor = NSColor.clear.cgColor
+            track.strokeColor = NSColor(white: 1, alpha: 0.14).cgColor
+            track.lineWidth = 3
+            layer?.addSublayer(track)
+            let ring = CAShapeLayer()
+            ring.path = arc
+            ring.fillColor = NSColor.clear.cgColor
+            ring.strokeColor = accent.cgColor
+            ring.lineWidth = 3
+            ring.lineCap = .round
+            ring.strokeEnd = 0.65
+            ring.contentsScale = scale
+            layer?.addSublayer(ring)
+        }
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+/// A selectable pill for an Animation Style: the style's glyph and its name in a
+/// rounded button that highlights (accent tint + border) when chosen. Click to
+/// select; the SettingsWindow keeps the two mutually exclusive.
+final class StylePill: NSView {
+    let styleTag: Int
+    private let onSelect: () -> Void
+    private var isSelected: Bool
+    private let glyphSize: CGFloat = 26
+
+    init(tag: Int, levelUp: Bool, title: String, selected: Bool, onSelect: @escaping () -> Void) {
+        self.styleTag = tag
+        self.onSelect = onSelect
+        self.isSelected = selected
+
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: NSFont.systemFontSize)
+
+        let padH: CGFloat = 12, gap: CGFloat = 8, padV: CGFloat = 7
+        label.sizeToFit()
+        let h = glyphSize + padV * 2
+        let w = padH + glyphSize + gap + ceil(label.frame.width) + padH
+        super.init(frame: NSRect(x: 0, y: 0, width: w, height: h))
+        wantsLayer = true
+        layer?.cornerRadius = 12
+        layer?.borderWidth = 1
+
+        let glyph = StyleGlyph(levelUp: levelUp, size: glyphSize)
+        glyph.frame = NSRect(x: padH, y: padV, width: glyphSize, height: glyphSize)
+        addSubview(glyph)
+
+        label.frame = NSRect(x: padH + glyphSize + gap, y: (h - label.frame.height) / 2,
+                             width: ceil(label.frame.width), height: label.frame.height)
+        addSubview(label)
+
+        applySelection()
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func setSelected(_ on: Bool) { isSelected = on; applySelection() }
+
+    private func applySelection() {
+        let accent = NSColor.controlAccentColor
+        layer?.backgroundColor = (isSelected ? accent.withAlphaComponent(0.18)
+                                             : NSColor(white: 0.5, alpha: 0.10)).cgColor
+        layer?.borderColor = (isSelected ? accent : .separatorColor).cgColor
+    }
+
+    override func mouseDown(with event: NSEvent) { onSelect() }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+}
+
 class SettingsWindow: NSWindow {
     weak var appDelegate: AppDelegate?
     private var axPollTimer: Timer?
+    private var tipPopover: NSPopover?
+    private var stylePills: [StylePill] = []   // the two Animation Style buttons
     private let contentW: CGFloat = 460
     private let pad: CGFloat = 32
     private let bannerH: CGFloat = 84
@@ -414,9 +564,9 @@ class SettingsWindow: NSWindow {
     /// Set during `--screenshot` capture so the window renders in its normal
     /// state (the AX-permission banner is suppressed).
     static var screenshotMode = false
-    static let durationLabels = ["Instant", "Short", "Medium", "Long", "Custom"]
-    static let bufferValues:   [TimeInterval] = [0.0, 0.5, 0.5, 0.7]   // pre-buffer dead-zone
-    static let durationValues: [TimeInterval] = [0.0, 0.0, 0.4, 0.6]   // charge sweep
+    static let holdDurationLabels = ["Instant", "Short", "Medium", "Long", "Custom"]
+    static let keyDelayValues:   [TimeInterval] = [0.0, 0.5, 0.5, 0.7]   // pre-buffer dead-zone
+    static let animationLengthValues: [TimeInterval] = [0.0, 0.0, 0.4, 0.6]   // charge sweep
     static let fadeConstant: TimeInterval = 0.4                        // dissolve
     static let swellConstant: CGFloat = 1.12                           // gel-release expansion
     static let customMax: TimeInterval = 1.5    // ceiling for each Custom slider
@@ -476,6 +626,10 @@ class SettingsWindow: NSWindow {
         let titleH: CGFloat = 36
         let chooseH: CGFloat = 32
         let sliderBlockH: CGFloat = 68  // caption + slider + tick labels
+        // The style selector only matters when there's a charge to visualize, so
+        // it's hidden for Instant/Short (preset < 2 — no charge animation).
+        let showsAnimationStyle = (appDelegate?.selectedPreset ?? 2) >= 2
+        let animationStyleBlockH: CGFloat = 68   // caption + a row of two selectable pills
         let customBlockH: CGFloat = showsCustom ? 132 : 0   // Custom timing sub-panel
         let bottomBarH: CGFloat = 96    // Quit / Done row + coffee link + bottom margin
         let unitGap: CGFloat = 10       // within a unit (title ↔ description)
@@ -492,6 +646,7 @@ class SettingsWindow: NSWindow {
         let bannerBlock = needsBanner ? (bannerGap + bannerH) : 0
         let totalH = topMargin + titleH + unitGap + descH + sectionGap + appBoxH
                    + sectionGap + sliderBlockH + customBlockH + bannerBlock
+                   + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
                    + sectionGap + bottomBarH
 
         setContentSize(NSSize(width: contentW, height: totalH))
@@ -603,7 +758,7 @@ class SettingsWindow: NSWindow {
         let sliderW: CGFloat = 320
         let sliderX = (contentW - sliderW) / 2
         let sliderY = y + 16
-        let labels = SettingsWindow.durationLabels
+        let labels = SettingsWindow.holdDurationLabels
         let last = labels.count - 1
 
         let slider = NSSlider(value: Double(appDelegate?.selectedPreset ?? 1),
@@ -650,12 +805,39 @@ class SettingsWindow: NSWindow {
             c.addSubview(box)
 
             let row1 = cBoxTop - 14
-            addCustomRow(to: c, top: row1, title: "Dead-zone",
-                         value: appDelegate?.customBuffer ?? 0.5,
+            addCustomRow(to: c, top: row1, title: "Key Delay",
+                         value: appDelegate?.customKeyDelay ?? 0.5,
                          sliderTag: 21, labelTag: 23)
-            addCustomRow(to: c, top: row1 - 48, title: "Charge",
-                         value: appDelegate?.customCharge ?? 0.4,
+            addCustomRow(to: c, top: row1 - 48, title: "Animation Length",
+                         value: appDelegate?.customAnimationLength ?? 0.4,
                          sliderTag: 22, labelTag: 24)
+        }
+
+        // Animation Style: two selectable pills, each showing the style's glyph
+        // (¾ ring / ¾ fill) and its name. Only shown when a charge is drawn.
+        if showsAnimationStyle {
+            y -= sectionGap + animationStyleBlockH
+            let styleCaption = NSTextField(labelWithString: "Animation Style")
+            styleCaption.frame = NSRect(x: pad, y: y + animationStyleBlockH - 20, width: innerW, height: 18)
+            styleCaption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
+            styleCaption.textColor = .secondaryLabelColor
+            styleCaption.alignment = .center
+            c.addSubview(styleCaption)
+
+            let selected = appDelegate?.animationStyle ?? 0
+            stylePills = [(false, "Power Up"), (true, "Level Up")].enumerated().map { i, opt in
+                StylePill(tag: i, levelUp: opt.0, title: opt.1, selected: selected == i) { [weak self] in
+                    self?.selectStyle(i)
+                }
+            }
+            let gapX: CGFloat = 16
+            let totalW = stylePills.reduce(0) { $0 + $1.frame.width } + gapX * CGFloat(stylePills.count - 1)
+            var px = (contentW - totalW) / 2
+            for pill in stylePills {
+                pill.setFrameOrigin(NSPoint(x: px, y: y))   // row sits at the block bottom
+                c.addSubview(pill)
+                px += pill.frame.width + gapX
+            }
         }
 
         // Bottom bar: Quit (secondary, left) + Done (primary, right), with the
@@ -673,27 +855,20 @@ class SettingsWindow: NSWindow {
         doneBtn.keyEquivalent = "\r"
         c.addSubview(doneBtn)
 
-        // "Buy me a coffee" link, centered below the buttons
-        let coffeeBtn = NSButton(title: "", target: self, action: #selector(openCoffee))
-        coffeeBtn.isBordered = false
-        let coffeeTitle = "☕ Buy me a coffee" as NSString
-        let coffeeAttr = NSMutableAttributedString(string: coffeeTitle as String)
-        coffeeAttr.addAttributes([
-            .foregroundColor: NSColor.secondaryLabelColor,
-            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize - 1),
-        ], range: NSRange(location: 0, length: coffeeTitle.length))
-        // Underline only the words, not the emoji.
-        let textStart = coffeeTitle.range(of: "Buy").location
-        if textStart != NSNotFound {
-            coffeeAttr.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue,
-                                    range: NSRange(location: textStart, length: coffeeTitle.length - textStart))
-        }
-        coffeeBtn.attributedTitle = coffeeAttr
-        coffeeBtn.sizeToFit()
-        coffeeBtn.frame = NSRect(x: (contentW - coffeeBtn.frame.width) / 2, y: 16,
-                                 width: coffeeBtn.frame.width, height: 20)
-        coffeeBtn.toolTip = "Support Key54 on Ko-fi"
-        c.addSubview(coffeeBtn)
+        // A lone jar emoji, centered below the buttons — a little easter egg
+        // that opens the support popover. No label; tooltip + pointing-hand
+        // cursor (LinkButton) hint that it's clickable.
+        let tipBtn = LinkButton(title: "", target: self, action: #selector(openTipJar(_:)))
+        tipBtn.isBordered = false
+        // Center the emoji in the button via a centered paragraph style (more
+        // reliable than .alignment for a borderless title button).
+        let jarPara = NSMutableParagraphStyle(); jarPara.alignment = .center
+        tipBtn.attributedTitle = NSAttributedString(string: "🫙", attributes: [
+            .font: NSFont.systemFont(ofSize: 18), .paragraphStyle: jarPara])
+        let tipW: CGFloat = 34
+        tipBtn.frame = NSRect(x: (contentW - tipW) / 2, y: 12, width: tipW, height: 26)
+        tipBtn.toolTip = "Tip Jar"
+        c.addSubview(tipBtn)
 
         contentView = c
         updateAppDisplay()
@@ -729,22 +904,28 @@ class SettingsWindow: NSWindow {
     }
 
     @objc private func sliderChanged(_ sender: NSSlider) {
-        let idx = max(0, min(Self.durationLabels.count - 1, Int(sender.doubleValue.rounded())))
+        let idx = max(0, min(Self.holdDurationLabels.count - 1, Int(sender.doubleValue.rounded())))
         guard let appDelegate, idx != appDelegate.selectedPreset else { return }
         let old = appDelegate.selectedPreset
         // First-ever visit to Custom seeds from the preset being left;
         // afterwards Custom keeps its own remembered values.
         if idx == 4, old < 4 { appDelegate.seedCustomIfNeeded(fromPreset: old) }
         appDelegate.selectedPreset = idx
-        // The Custom rows appear/disappear with the selection. Rebuild after
-        // the slider finishes tracking — tearing it down mid-drag confuses
-        // AppKit.
-        if (idx == 4) != (old == 4) {
+        // The Custom rows and the Style selector appear/disappear with the
+        // selection (Style is hidden for Instant/Short). Rebuild after the
+        // slider finishes tracking — tearing it down mid-drag confuses AppKit.
+        if (idx == 4) != (old == 4) || (idx >= 2) != (old >= 2) {
             DispatchQueue.main.async { [weak self] in
                 self?.rebuild()
                 self?.center()
             }
         }
+    }
+
+    /// Select an Animation Style (0 = Power Up, 1 = Level Up) and update the pills.
+    private func selectStyle(_ idx: Int) {
+        appDelegate?.animationStyle = idx
+        stylePills.forEach { $0.setSelected($0.styleTag == idx) }
     }
 
     /// One labeled slider row of the Custom preset editor.
@@ -780,10 +961,10 @@ class SettingsWindow: NSWindow {
         let snapped = (sender.doubleValue / Self.customStep).rounded() * Self.customStep
         sender.doubleValue = snapped
         if sender.tag == 21 {
-            appDelegate?.customBuffer = snapped
+            appDelegate?.customKeyDelay = snapped
             (contentView?.viewWithTag(23) as? NSTextField)?.stringValue = Self.fmt(snapped)
         } else {
-            appDelegate?.customCharge = snapped
+            appDelegate?.customAnimationLength = snapped
             (contentView?.viewWithTag(24) as? NSTextField)?.stringValue = Self.fmt(snapped)
         }
     }
@@ -813,6 +994,92 @@ class SettingsWindow: NSWindow {
     @objc private func openCoffee() {
         NSWorkspace.shared.open(URL(string: "https://ko-fi.com/grokcodile")!)
     }
+
+    @objc private func openSponsors() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/sponsors/grokcodile")!)
+    }
+
+    /// A little "note from the developer" popover that slides out of the Tip
+    /// Jar link: a round headshot, a personal message, the two ways to support
+    /// Key54, and a link to file issues.
+    @objc private func openTipJar(_ sender: NSButton) {
+        let w: CGFloat = 285, h: CGFloat = 284
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
+
+        // Round headshot — `headshot.png` bundled into Resources by build.sh.
+        let d: CGFloat = 64
+        let photo = NSView(frame: NSRect(x: (w - d) / 2, y: 204, width: d, height: d))
+        photo.wantsLayer = true
+        photo.layer?.cornerRadius = d / 2
+        photo.layer?.masksToBounds = true
+        photo.layer?.borderWidth = 1
+        photo.layer?.borderColor = NSColor.separatorColor.cgColor
+        if let url = Bundle.main.url(forResource: "headshot", withExtension: "png"),
+           let img = NSImage(contentsOf: url) {
+            var rect = CGRect(origin: .zero, size: img.size)
+            photo.layer?.contents = img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+            photo.layer?.contentsGravity = .resizeAspectFill
+        } else {
+            photo.layer?.backgroundColor = NSColor(white: 0.85, alpha: 1).cgColor
+        }
+        v.addSubview(photo)
+
+        let greeting = NSTextField(labelWithString: "Hi, I'm Ethan 👋")
+        greeting.font = .systemFont(ofSize: 15, weight: .semibold)
+        greeting.alignment = .center
+        greeting.frame = NSRect(x: 16, y: 176, width: w - 32, height: 20)
+        v.addSubview(greeting)
+
+        let body = NSTextField(wrappingLabelWithString:
+            "Key54 is 100% free, but if it's earned a spot on your Mac, a small donation helps me keep it updated and supported!")
+        body.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
+        body.textColor = .secondaryLabelColor
+        body.alignment = .center
+        body.frame = NSRect(x: 18, y: 118, width: w - 36, height: 52)
+        v.addSubview(body)
+
+        let btnW: CGFloat = 210
+        let kofi = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 80, width: btnW, height: 30))
+        kofi.title = "☕  Leave a tip on Ko-fi"
+        kofi.target = self
+        kofi.action = #selector(openCoffee)
+        v.addSubview(kofi)
+
+        let spon = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 42, width: btnW, height: 30))
+        spon.title = "❤️  Sponsor me on GitHub"
+        spon.target = self
+        spon.action = #selector(openSponsors)
+        v.addSubview(spon)
+
+        // Subtle footer link to the repo's issues.
+        let issue = LinkButton(title: "", target: self, action: #selector(openIssues))
+        issue.isBordered = false
+        let issueTitle = "Report a bug or request a feature" as NSString
+        let issueAttr = NSMutableAttributedString(string: issueTitle as String)
+        issueAttr.addAttributes([
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize - 2),
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ], range: NSRange(location: 0, length: issueTitle.length))
+        issue.attributedTitle = issueAttr
+        issue.sizeToFit()
+        issue.frame = NSRect(x: (w - issue.frame.width) / 2, y: 12,
+                             width: issue.frame.width, height: 18)
+        v.addSubview(issue)
+
+        let vc = NSViewController()
+        vc.view = v
+        let pop = NSPopover()
+        pop.contentViewController = vc
+        pop.contentSize = NSSize(width: w, height: h)
+        pop.behavior = .transient
+        tipPopover = pop
+        pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+    }
+
+    @objc private func openIssues() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/grokcodile/key54/issues")!)
+    }
 }
 
 // MARK: - Trigger HUD
@@ -823,25 +1090,39 @@ class SettingsWindow: NSWindow {
 /// The ring + icon sit on a Liquid Glass slab (macOS 26+) so the HUD reads
 /// like a system bezel; older systems get the classic frosted HUD material.
 final class TriggerHUD {
+    /// How the hold is visualized. `.powerUp` is the classic accent ring sweep;
+    /// `.levelUp` fills the glass slab like a glass of water. Chosen in settings
+    /// (the "Animation Style" selector) and read fresh on each trigger.
+    enum AnimationStyle { case powerUp, levelUp }
+    private var animationStyle: AnimationStyle {
+        UserDefaults.standard.integer(forKey: "animationStyle") == 1 ? .levelUp : .powerUp
+    }
+
     private let size: CGFloat = 320   // generous so the expanding ring isn't clipped
     private let ringRadius: CGFloat = 52
+    private let puckSize: CGFloat = 148
 
     private lazy var panel: NSPanel = makePanel()
     private let track = CAShapeLayer()
     private let ring = CAShapeLayer()
     private let iconLayer = CALayer()
+    // Level Up style: a rounded clip the size of the glass slab and a flat fill
+    // body that rises from the bottom as the hold charges.
+    private let waterClip = CALayer()
+    private let waterRise = CALayer()
+    private let waterShape = CAShapeLayer()
     private var puckView: NSView!     // glass slab behind the ring + icon
     private var puckRestFrame = NSRect.zero
     private var expandOnFire = true   // skip the radiate for very short holds
     private var fadeGeneration = 0    // invalidates stale fade-out completions
-    private var chargeDuration: TimeInterval = 0.001   // current preset's fill time
+    private var animationLength: TimeInterval = 0.001   // current preset's fill time
 
     // MARK: Public
 
     func begin(fill: TimeInterval, icon: NSImage?) {
         positionHUD()
         expandOnFire = true
-        let ringless = fill <= 0   // zero-charge preset (Short): no ring, larger icon
+        let animationless = fill <= 0   // zero-charge preset (Short): no ring, larger icon
 
         // Cancel any in-flight fade and restore full window opacity (and the
         // glass slab's resting frame), or the panel stays pinned at its
@@ -853,18 +1134,35 @@ final class TriggerHUD {
         puckView.animator().frame = puckRestFrame
         NSAnimationContext.endGrouping()
 
+        let levelUpMode = (animationStyle == .levelUp) && !animationless
         CATransaction.begin(); CATransaction.setDisableActions(true)
         ring.removeAllAnimations()
         track.removeAllAnimations()
         iconLayer.removeAllAnimations()
+        waterClip.removeAllAnimations()
+        waterRise.removeAllAnimations()
+        waterShape.removeAllAnimations()
         // Re-resolve the accent color so a change in System Settings shows up
         // on the next trigger (CGColor snapshots don't track the dynamic color).
-        ring.strokeColor = NSColor.controlAccentColor.cgColor
-        ring.shadowColor = NSColor.controlAccentColor.cgColor
-        ring.opacity = ringless ? 0 : 1   // also resets cancel()'s post-drain hide
-        track.opacity = ringless ? 0 : 1
+        let accent = NSColor.controlAccentColor
+        ring.strokeColor = accent.cgColor
+        ring.shadowColor = accent.cgColor
         ring.strokeEnd = 1   // full ring (the charge animation draws it on)
-        let iconSize: CGFloat = ringless ? 84 : 64
+        // Only one visualization shows at a time; the other stays hidden.
+        let powerUpMode = (animationStyle == .powerUp) && !animationless
+        ring.opacity = powerUpMode ? 1 : 0   // also resets cancel()'s post-drain hide
+        track.opacity = powerUpMode ? 1 : 0
+        waterClip.opacity = levelUpMode ? 1 : 0
+        if levelUpMode {
+            // Solid accent with an accent glow at the surface, echoing the ring's
+            // glow (re-resolve the dynamic accent for both fill and glow).
+            waterShape.fillColor = accent.cgColor
+            waterShape.shadowColor = accent.cgColor
+            waterRise.transform = CATransform3DMakeTranslation(0, -puckSize, 0)   // start empty
+        }
+        // Power Up keeps the icon small so the ring fits around it; Level Up (and
+        // the ringless Short/Instant presets) use the larger icon.
+        let iconSize: CGFloat = (animationless || levelUpMode) ? 84 : 64
         iconLayer.frame = CGRect(x: size / 2 - iconSize / 2,
                                  y: size / 2 - iconSize / 2,
                                  width: iconSize, height: iconSize)
@@ -876,24 +1174,38 @@ final class TriggerHUD {
 
         panel.orderFrontRegardless()
 
-        // Draw the ring on over the hold duration. "None" (fill == 0) clamps to
-        // a near-instant charge — same animation, just immediate. Remember the
-        // rate so an early release can drain back at the same speed.
-        chargeDuration = max(fill, 0.001)
-        let anim = CABasicAnimation(keyPath: "strokeEnd")
-        anim.fromValue = 0
-        anim.toValue = 1
-        anim.duration = chargeDuration
-        anim.timingFunction = CAMediaTimingFunction(name: .linear)
-        anim.fillMode = .forwards
-        anim.isRemovedOnCompletion = false
-        ring.add(anim, forKey: "fill")
+        // Charge over the hold duration. "None" (fill == 0) clamps to a
+        // near-instant charge. Remember the rate so an early release can drain
+        // back at the same speed.
+        animationLength = max(fill, 0.001)
+        if levelUpMode {
+            // Raise the water level from empty to full over the hold.
+            let rise = CABasicAnimation(keyPath: "transform.translation.y")
+            rise.fromValue = -puckSize
+            rise.toValue = 0
+            rise.duration = animationLength
+            rise.timingFunction = CAMediaTimingFunction(name: .linear)
+            rise.fillMode = .forwards
+            rise.isRemovedOnCompletion = false
+            waterRise.add(rise, forKey: "fill")
+        } else if powerUpMode {
+            // Draw the ring on over the hold duration.
+            let anim = CABasicAnimation(keyPath: "strokeEnd")
+            anim.fromValue = 0
+            anim.toValue = 1
+            anim.duration = animationLength
+            anim.timingFunction = CAMediaTimingFunction(name: .linear)
+            anim.fillMode = .forwards
+            anim.isRemovedOnCompletion = false
+            ring.add(anim, forKey: "fill")
+        }
     }
 
     /// Early release: drain the ring back at the same rate it charged, then
     /// dissolve with the same grace as a full-duration dismissal — but
     /// settling slightly inward, the opposite of the firing swell.
     func cancel(fade: TimeInterval = 0.4) {
+        if animationStyle == .levelUp { cancelWater(fade: fade); return }
         // Snap the ring to its current visible value.
         let cur = ring.presentation()?.strokeEnd ?? ring.strokeEnd
         ring.removeAnimation(forKey: "fill")
@@ -904,7 +1216,7 @@ final class TriggerHUD {
         drain.toValue = 0
         // Drain at 1.5× the charge rate — present enough to read as a
         // discharge, brisk enough that backing out never feels like a wait.
-        drain.duration = max(TimeInterval(cur) * chargeDuration / 1.5, 0.01)
+        drain.duration = max(TimeInterval(cur) * animationLength / 1.5, 0.01)
         drain.timingFunction = CAMediaTimingFunction(name: .linear)
         drain.fillMode = .forwards
         drain.isRemovedOnCompletion = false
@@ -939,6 +1251,7 @@ final class TriggerHUD {
     /// and glass slab together — as it goes, like a system bezel releasing.
     /// Kept subtle so nothing escapes past the slab's edge.
     func fire(fade: TimeInterval = 0.4, swellTo: CGFloat = 1.12) {
+        if animationStyle == .levelUp { fireWater(fade: fade, swellTo: swellTo); return }
         ring.removeAnimation(forKey: "fill")
         CATransaction.begin(); CATransaction.setDisableActions(true); ring.strokeEnd = 1; CATransaction.commit()
 
@@ -949,6 +1262,65 @@ final class TriggerHUD {
 
         // Ring and icon swell in lockstep with the glass slab below them.
         dissolve(fade: fade, scaleTo: swellTo, layers: [ring, iconLayer])
+    }
+
+    /// Water early-release: drain the level back down at ~1.5× the fill rate,
+    /// then dissolve inward — the liquid analogue of the ring's discharge.
+    private func cancelWater(fade: TimeInterval) {
+        let cur = waterTranslationY()
+        waterRise.removeAnimation(forKey: "fill")
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        waterRise.transform = CATransform3DMakeTranslation(0, cur, 0)
+        CATransaction.commit()
+
+        let level = max(0, min(1, 1 + cur / puckSize))   // 0 empty … 1 full
+        let drain = CABasicAnimation(keyPath: "transform.translation.y")
+        drain.fromValue = cur
+        drain.toValue = -puckSize
+        drain.duration = max(Double(level) * animationLength / 1.5, 0.01)
+        drain.timingFunction = CAMediaTimingFunction(name: .linear)
+        drain.fillMode = .forwards
+        drain.isRemovedOnCompletion = false
+
+        let gen = fadeGeneration
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        CATransaction.setCompletionBlock { [weak self] in
+            guard let self, self.fadeGeneration == gen else { return }
+            self.dissolve(fade: fade, scaleTo: 0.9, layers: [self.iconLayer, self.waterClip])
+        }
+        waterRise.transform = CATransform3DMakeTranslation(0, -puckSize, 0)
+        waterRise.add(drain, forKey: "drain")
+        CATransaction.commit()
+    }
+
+    /// Water fire: top the level off fast, then swell + fade the whole HUD
+    /// (icon and the filled glass together) like the ring's gel release.
+    private func fireWater(fade: TimeInterval, swellTo: CGFloat) {
+        waterRise.removeAnimation(forKey: "fill")
+        guard expandOnFire, waterClip.opacity > 0 else { fadeOut(duration: fade); return }
+
+        let cur = waterTranslationY()
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        waterRise.transform = CATransform3DMakeTranslation(0, 0, 0)
+        CATransaction.commit()
+        let top = CABasicAnimation(keyPath: "transform.translation.y")
+        top.fromValue = cur
+        top.toValue = 0
+        top.duration = 0.14
+        top.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        top.fillMode = .forwards
+        top.isRemovedOnCompletion = false
+        waterRise.add(top, forKey: "top")
+
+        dissolve(fade: fade, scaleTo: swellTo, layers: [iconLayer, waterClip])
+    }
+
+    /// Current animated water offset (negative = below the brim).
+    private func waterTranslationY() -> CGFloat {
+        guard let n = waterRise.presentation()?.value(forKeyPath: "transform.translation.y") as? NSNumber
+        else { return 0 }
+        return CGFloat(n.doubleValue)
     }
 
     /// Shared exit: fade the panel while the given layers and the glass slab
@@ -988,6 +1360,9 @@ final class TriggerHUD {
         ring.removeAllAnimations()
         track.removeAllAnimations()
         iconLayer.removeAllAnimations()
+        waterClip.removeAllAnimations()
+        waterRise.removeAllAnimations()
+        waterShape.removeAllAnimations()
         CATransaction.commit()
         panel.alphaValue = 0   // begin() restores this on the next show
         panel.orderOut(nil)
@@ -1016,7 +1391,6 @@ final class TriggerHUD {
 
         // Glass slab behind the ring + icon, sized so the ring (and the slight
         // firing swell) sits comfortably inside it.
-        let puckSize: CGFloat = 148
         puckRestFrame = NSRect(x: (size - puckSize) / 2, y: (size - puckSize) / 2,
                                width: puckSize, height: puckSize)
         puckView = Self.glassBackdrop(frame: puckRestFrame, cornerRadius: 36)
@@ -1028,6 +1402,7 @@ final class TriggerHUD {
         overlay.layer?.backgroundColor = NSColor.clear.cgColor
         v.addSubview(overlay)
         buildLayers(in: overlay.layer!)
+        buildWaterLayers(in: overlay.layer!)
 
         p.contentView = v
         return p
@@ -1102,6 +1477,36 @@ final class TriggerHUD {
         iconLayer.contentsGravity = .resizeAspect
         iconLayer.contentsScale = scale
         root.addSublayer(iconLayer)
+    }
+
+    /// Build the water-fill layers (hidden unless `animationStyle == .levelUp`): a rounded
+    /// clip matching the glass slab and a flat fill body. Inserted *below* the
+    /// icon so the icon stays crisp as the level passes it.
+    private func buildWaterLayers(in root: CALayer) {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let o = (size - puckSize) / 2
+        waterClip.frame = CGRect(x: o, y: o, width: puckSize, height: puckSize)
+        waterClip.cornerRadius = 36           // matches the glass slab
+        waterClip.masksToBounds = true
+        waterClip.opacity = 0
+        root.insertSublayer(waterClip, below: iconLayer)
+
+        waterRise.frame = waterClip.bounds
+        waterClip.addSublayer(waterRise)
+
+        // A flat-topped fill the size of the slab; raising `waterRise` reveals it
+        // from the bottom up.
+        waterShape.path = CGPath(rect: waterClip.bounds, transform: nil)
+        waterShape.frame = waterClip.bounds
+        waterShape.fillColor = NSColor.controlAccentColor.cgColor   // solid; reads cleanly in light mode
+        // Accent glow at the surface, echoing the Power Up ring's glow. The clip
+        // confines it to the slab, so it reads as a soft band riding the waterline.
+        waterShape.shadowColor = NSColor.controlAccentColor.cgColor
+        waterShape.shadowRadius = 8     // KNOB: glow softness (matches the ring)
+        waterShape.shadowOpacity = 0.9
+        waterShape.shadowOffset = .zero
+        waterShape.contentsScale = scale
+        waterRise.addSublayer(waterShape)
     }
 
     // MARK: Helpers

@@ -29,6 +29,10 @@ fi
 iconutil -c icns AppIcon.iconset -o AppIcon.icns
 cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
 
+# Developer headshot for the Tip Jar popover (optional — shows a placeholder
+# circle if absent).
+[ -f headshot.png ] && cp headshot.png "${BUILD_DIR}/Contents/Resources/headshot.png"
+
 # Explicit deployment target: keeps the binary runnable on macOS 13+ even when
 # built with a newer SDK (Liquid Glass APIs are weak-linked and runtime-gated).
 swiftc -O main.swift \
