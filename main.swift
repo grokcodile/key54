@@ -631,7 +631,7 @@ class SettingsWindow: NSWindow {
         let showsAnimationStyle = (appDelegate?.selectedPreset ?? 2) >= 2
         let animationStyleBlockH: CGFloat = 68   // caption + a row of two selectable pills
         let customBlockH: CGFloat = showsCustom ? 132 : 0   // Custom timing sub-panel
-        let bottomBarH: CGFloat = 96    // Quit / Done row + coffee link + bottom margin
+        let bottomBarH: CGFloat = 64    // Quit / Done row + bottom margin
         let unitGap: CGFloat = 10       // within a unit (title ↔ description)
         let sectionGap: CGFloat = 28    // between sections — the layout's rhythm
 
@@ -840,10 +840,9 @@ class SettingsWindow: NSWindow {
             }
         }
 
-        // Bottom bar: Quit (secondary, left) + Done (primary, right), with the
-        // coffee link as its own quieter unit below.
+        // Bottom bar: Quit (secondary, left) + Done (primary, right).
         let btnW: CGFloat = 100
-        let barY: CGFloat = 56
+        let barY: CGFloat = 20
         let quitBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
         quitBtn.frame = NSRect(x: pad, y: barY, width: btnW, height: 32)
         quitBtn.bezelStyle = .rounded
@@ -855,18 +854,19 @@ class SettingsWindow: NSWindow {
         doneBtn.keyEquivalent = "\r"
         c.addSubview(doneBtn)
 
-        // A lone jar emoji, centered below the buttons — a little easter egg
-        // that opens the support popover. No label; tooltip + pointing-hand
-        // cursor (LinkButton) hint that it's clickable.
+        // Tip Jar easter egg: a lone jar emoji tucked into the top-right of the
+        // titlebar, mirroring the traffic lights on the left. Tooltip + hand
+        // cursor (LinkButton) hint it's clickable; NSControl isn't part of the
+        // titlebar drag region, so the click still registers.
         let tipBtn = LinkButton(title: "", target: self, action: #selector(openTipJar(_:)))
         tipBtn.isBordered = false
-        // Center the emoji in the button via a centered paragraph style (more
-        // reliable than .alignment for a borderless title button).
         let jarPara = NSMutableParagraphStyle(); jarPara.alignment = .center
         tipBtn.attributedTitle = NSAttributedString(string: "🫙", attributes: [
-            .font: NSFont.systemFont(ofSize: 18), .paragraphStyle: jarPara])
+            .font: NSFont.systemFont(ofSize: 14), .paragraphStyle: jarPara])   // sized to ~match the traffic lights
         let tipW: CGFloat = 34
-        tipBtn.frame = NSRect(x: (contentW - tipW) / 2, y: 12, width: tipW, height: 26)
+        // Mirror the traffic lights: the jar's top/right padding matches their
+        // top/left padding (≈9 pt each).
+        tipBtn.frame = NSRect(x: contentW - 30, y: totalH - 30, width: tipW, height: 26)
         tipBtn.toolTip = "Tip Jar"
         c.addSubview(tipBtn)
 
@@ -1074,7 +1074,7 @@ class SettingsWindow: NSWindow {
         pop.contentSize = NSSize(width: w, height: h)
         pop.behavior = .transient
         tipPopover = pop
-        pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+        pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)   // opens to the right of the jar
     }
 
     @objc private func openIssues() {
