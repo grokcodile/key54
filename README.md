@@ -1,3 +1,5 @@
+<div align="center">
+
 <img src="screenshots/icon_readme.png" width="128" alt="Key54 icon">
 
 # Key54
@@ -6,6 +8,16 @@
 
 **Hold the Command (⌘) key on the right side of your keyboard to summon one chosen app — hold it again to switch back to whatever you were doing.**
 
+[![Latest release](https://img.shields.io/github/v/release/grokcodile/key54?label=download&sort=semver)](https://github.com/grokcodile/key54/releases/latest)
+[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](#requirements)
+[![License: MIT](https://img.shields.io/github/license/grokcodile/key54)](LICENSE)
+
+[Download](#download) · [Features](#features) · [Hold Duration](#hold-duration) · [Build](#build) · [Tip Jar](#tip-jar)
+
+<img src="screenshots/settings.png?v=1.12" width="440" alt="Key54 settings window">
+
+</div>
+
 Key54 isn't another app library switcher, launcher, or palette. It doesn't try to replace ⌘-Tab, Mission Control, or Spotlight, and it doesn't pile on the features that tools like Raycast, Alfred, LaunchBar, rcmd, or Monarch already do well. It does exactly one thing: a single, dedicated key for the *one* app you reach for constantly.
 
 There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, and no chords. You pick the app once; after that it's pure muscle memory — like a push-to-talk button for your terminal, notes, browser, or chat. It claims the otherwise-dead *gesture* of holding the right ⌘ key, so quick taps and normal right-⌘ shortcuts keep working exactly as before (unless you opt into the Instant preset) — you give up nothing.
@@ -13,10 +25,6 @@ There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, an
 And it's calm by design. Instead of racing to ⌘-Tab across your desktop and back, you hold the key and it charges for a beat before it fires — a small, deliberate pause that lets your brain settle into the switch (dial it to Instant if you'd rather skip it). One key, one app, no chord to remember: a context switch that gives you a moment to breathe.
 
 It's fast, tiny (~1 MB download), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
-
-## Screenshot
-
-![Key54 settings window](screenshots/settings.png?v=1.12)
 
 ## Download
 
@@ -109,7 +117,6 @@ This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc c
 
 To change the app or settings later, just open Key54 again from `Applications`.
 
-
 ## Uninstall
 
 1. Quit Key54 (open it and click **Quit**, or `killall Key54`).
@@ -150,7 +157,6 @@ Key54 installs a `CGEventTap` that watches `flagsChanged` events for the right C
 claims. (You can see it in the source: the event tap watches for `keycode 54`.)
 So **Key54** is literally that — the key, named by its number; the app's whole
 job written as a coordinate.
-
 
 ## Notes
 
