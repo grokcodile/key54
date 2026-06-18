@@ -1,7 +1,7 @@
 #!/bin/bash
 # Captures screenshots/settings.png — a transparent shot of just the settings
-# window (no drop shadow, no background). Run by hand; intentionally NOT wired
-# into build.sh or install.sh.
+# window (no drop shadow, no background). Run by hand, or via install.sh (which
+# calls it after installing). Not part of the CI release build.
 #
 #   bash screenshot.sh
 #
@@ -22,4 +22,11 @@ APP="/Applications/${APP_NAME}.app"
 
 if command -v pngquant >/dev/null 2>&1; then
     pngquant --quality=70-95 --speed 1 --ext .png --force "$OUT" || true
+fi
+
+# Tie the README image cache-buster to the release version so GitHub re-fetches
+# the screenshot whenever the version bumps (see Info.plist).
+VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist 2>/dev/null || true)
+if [ -n "$VERSION" ]; then
+    sed -i '' -E "s/(settings\.png\?v=)[0-9.]+/\1${VERSION}/" README.md
 fi
