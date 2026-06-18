@@ -12,7 +12,7 @@ There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, an
 
 And it's calm by design. Instead of racing to :keyboard:-Tab across your desktop and back, you hold the key and it charges for a beat before it fires — a small, deliberate pause that lets your brain settle into the switch (dial it to Instant if you'd rather skip it). One key, one app, no chord to remember: a context switch that gives you a moment to breathe.
 
-It's fast, tiny (2.3 MB), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
+It's fast, tiny (~1 MB download), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
 
 ## Screenshot
 
@@ -20,7 +20,7 @@ It's fast, tiny (2.3 MB), uses almost zero system resources, and stays out of th
 
 ## Download
 
-**Download the latest [Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg) — or see [all releases](https://github.com/grokcodile/key54/releases/latest).** *This link always points to the most recent release build.*
+**Download the latest [Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg) — or see [all releases](https://github.com/grokcodile/key54/releases).** *This link always points to the most recent release build.*
 
 Open the `.dmg` and drag **Key54** into your `Applications` folder.
 

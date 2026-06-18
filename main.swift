@@ -17,6 +17,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var hud = TriggerHUD()
     private var bufferTimer: Timer?
     private var hudVisible = false
+    // True from the instant a charge commits to firing until the switch
+    // completes — blocks a re-press in that window from starting a stray charge.
+    private var firing = false
     var showAnimation: Bool {
         get { UserDefaults.standard.object(forKey: "showAnimation") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "showAnimation") }
@@ -150,16 +153,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Toggle
 
-    func toggleApp() {
-        let url = targetAppURL()
-        let config = NSWorkspace.OpenConfiguration()
-        config.activates = true
+    /// Toggle the target app. `dismissing` lets the caller pin the decision made
+    /// when the charge began (so the HUD preview and the action agree); when nil
+    /// (instant / no-HUD paths) the frontmost app is sampled fresh.
+    func toggleApp(dismissing: Bool? = nil) {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        let shouldDismiss = dismissing ?? (frontmost?.bundleIdentifier == resolvedBundleID())
 
-        if let frontmost = NSWorkspace.shared.frontmostApplication,
-           frontmost.bundleIdentifier == resolvedBundleID() {
+        if shouldDismiss, let frontmost {
             dismiss(frontmost)
         } else {
-            NSWorkspace.shared.openApplication(at: url, configuration: config, completionHandler: nil)
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            NSWorkspace.shared.openApplication(at: targetAppURL(), configuration: config, completionHandler: nil)
         }
     }
 
@@ -303,7 +309,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard event.getIntegerValueField(.keyboardEventKeycode) == 54 else {
                     return Unmanaged.passRetained(event)
                 }
-                if event.flags.contains(.maskCommand) {
+                // Use the device-specific right-Command bit (NX_DEVICERCMDKEYMASK,
+                // 0x10) rather than the generic .maskCommand — otherwise a right-⌘
+                // release while left-⌘ is still held reads as a press.
+                let rightCommandDown = event.flags.rawValue & 0x10 != 0
+                if rightCommandDown {
                     DispatchQueue.main.async { delegate.scheduleToggle() }
                 } else {
                     DispatchQueue.main.async { delegate.cancelToggle() }
@@ -333,7 +343,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func scheduleToggle() {
-        guard bufferTimer == nil, holdTimer == nil else { return }
+        guard bufferTimer == nil, holdTimer == nil, !firing else { return }
         // Per-preset dead-zone buffer. Only if right-⌘ is still held past it do
         // we engage and start the charge countdown, so a quick tap or chord
         // isn't hijacked. (Instant's buffer is 0 — it triggers immediately.)
@@ -359,10 +369,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Decide the destination once, here — the HUD icon and the fired toggle
+        // both use this same decision, so they can't diverge if focus changes
+        // during the hold (dismiss the target if it's frontmost, else summon it).
+        let dismissing = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == resolvedBundleID()
+
         if showAnimation {
-            // Show the icon of the app we'll end up in — the previous app if
-            // we're dismissing the target, otherwise the target itself.
-            let dismissing = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == resolvedBundleID()
             let icon = dismissing
                 ? (previousApp?.icon ?? NSWorkspace.shared.icon(forFile: "/System/Library/CoreServices/Finder.app"))
                 : NSWorkspace.shared.icon(forFile: targetAppURL().path)
@@ -373,7 +385,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         holdTimer = Timer.scheduledTimer(withTimeInterval: charge, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.holdTimer = nil
-            guard self.hudVisible else { self.toggleApp(); return }
+            guard self.hudVisible else { self.toggleApp(dismissing: dismissing); return }
             self.hudVisible = false
 
             // Always dissolve the HUD fully *in place first*, then switch —
@@ -383,10 +395,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // "ghost ring" can never reappear; normal toggles get the same
             // unhurried feel for free. The brief extra beat lets the window
             // server composite the removal before the transition begins.
+            //
+            // `firing` blocks a re-press during this dissolve+switch window from
+            // starting a stray second charge (and a stale hideNow()).
+            self.firing = true
             self.hud.fire(fade: fade, swellTo: swell)
             DispatchQueue.main.asyncAfter(deadline: .now() + fade + 0.05) {
                 self.hud.hideNow()
-                self.toggleApp()
+                self.toggleApp(dismissing: dismissing)
+                self.firing = false
             }
         }
     }
@@ -594,6 +611,11 @@ class SettingsWindow: NSWindow {
             name: NSNotification.Name("com.apple.accessibility.api"),
             object: nil
         )
+    }
+
+    deinit {
+        DistributedNotificationCenter.default().removeObserver(self)
+        axPollTimer?.invalidate()
     }
 
     // MARK: - Layout
@@ -1006,7 +1028,8 @@ class SettingsWindow: NSWindow {
         let w: CGFloat = 285, h: CGFloat = 284
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
 
-        // Round headshot — `headshot.png` bundled into Resources by build.sh.
+        // Round headshot — `headshot.heic` (128 px = 2× the 64 pt view) bundled
+        // into Resources by build.sh. HEIC keeps the asset ~7 KB instead of ~128 KB.
         let d: CGFloat = 64
         let photo = NSView(frame: NSRect(x: (w - d) / 2, y: 204, width: d, height: d))
         photo.wantsLayer = true
@@ -1014,7 +1037,7 @@ class SettingsWindow: NSWindow {
         photo.layer?.masksToBounds = true
         photo.layer?.borderWidth = 1
         photo.layer?.borderColor = NSColor.separatorColor.cgColor
-        if let url = Bundle.main.url(forResource: "headshot", withExtension: "png"),
+        if let url = Bundle.main.url(forResource: "headshot", withExtension: "heic"),
            let img = NSImage(contentsOf: url) {
             var rect = CGRect(origin: .zero, size: img.size)
             photo.layer?.contents = img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
@@ -1113,7 +1136,10 @@ final class TriggerHUD {
     private let waterShape = CAShapeLayer()
     private var puckView: NSView!     // glass slab behind the ring + icon
     private var puckRestFrame = NSRect.zero
-    private var expandOnFire = true   // skip the radiate for very short holds
+    // The style chosen when the current charge began — snapshotted so a change
+    // in Settings mid-hold can't route begin() and fire()/cancel() to different
+    // visualizations.
+    private var activeStyle: AnimationStyle = .powerUp
     private var fadeGeneration = 0    // invalidates stale fade-out completions
     private var animationLength: TimeInterval = 0.001   // current preset's fill time
 
@@ -1121,7 +1147,7 @@ final class TriggerHUD {
 
     func begin(fill: TimeInterval, icon: NSImage?) {
         positionHUD()
-        expandOnFire = true
+        activeStyle = animationStyle   // snapshot — cancel()/fire() must match begin()
         let animationless = fill <= 0   // zero-charge preset (Short): no ring, larger icon
 
         // Cancel any in-flight fade and restore full window opacity (and the
@@ -1134,7 +1160,7 @@ final class TriggerHUD {
         puckView.animator().frame = puckRestFrame
         NSAnimationContext.endGrouping()
 
-        let levelUpMode = (animationStyle == .levelUp) && !animationless
+        let levelUpMode = (activeStyle == .levelUp) && !animationless
         CATransaction.begin(); CATransaction.setDisableActions(true)
         ring.removeAllAnimations()
         track.removeAllAnimations()
@@ -1149,7 +1175,7 @@ final class TriggerHUD {
         ring.shadowColor = accent.cgColor
         ring.strokeEnd = 1   // full ring (the charge animation draws it on)
         // Only one visualization shows at a time; the other stays hidden.
-        let powerUpMode = (animationStyle == .powerUp) && !animationless
+        let powerUpMode = (activeStyle == .powerUp) && !animationless
         ring.opacity = powerUpMode ? 1 : 0   // also resets cancel()'s post-drain hide
         track.opacity = powerUpMode ? 1 : 0
         waterClip.opacity = levelUpMode ? 1 : 0
@@ -1205,7 +1231,7 @@ final class TriggerHUD {
     /// dissolve with the same grace as a full-duration dismissal — but
     /// settling slightly inward, the opposite of the firing swell.
     func cancel(fade: TimeInterval = 0.4) {
-        if animationStyle == .levelUp { cancelWater(fade: fade); return }
+        if activeStyle == .levelUp { cancelWater(fade: fade); return }
         // Snap the ring to its current visible value.
         let cur = ring.presentation()?.strokeEnd ?? ring.strokeEnd
         ring.removeAnimation(forKey: "fill")
@@ -1251,11 +1277,9 @@ final class TriggerHUD {
     /// and glass slab together — as it goes, like a system bezel releasing.
     /// Kept subtle so nothing escapes past the slab's edge.
     func fire(fade: TimeInterval = 0.4, swellTo: CGFloat = 1.12) {
-        if animationStyle == .levelUp { fireWater(fade: fade, swellTo: swellTo); return }
+        if activeStyle == .levelUp { fireWater(fade: fade, swellTo: swellTo); return }
         ring.removeAnimation(forKey: "fill")
         CATransaction.begin(); CATransaction.setDisableActions(true); ring.strokeEnd = 1; CATransaction.commit()
-
-        guard expandOnFire else { fadeOut(duration: fade); return }
 
         // Hide the faint track instantly so only the glowing ring remains.
         CATransaction.begin(); CATransaction.setDisableActions(true); track.opacity = 0; CATransaction.commit()
@@ -1298,7 +1322,7 @@ final class TriggerHUD {
     /// (icon and the filled glass together) like the ring's gel release.
     private func fireWater(fade: TimeInterval, swellTo: CGFloat) {
         waterRise.removeAnimation(forKey: "fill")
-        guard expandOnFire, waterClip.opacity > 0 else { fadeOut(duration: fade); return }
+        guard waterClip.opacity > 0 else { fadeOut(duration: fade); return }
 
         let cur = waterTranslationY()
         CATransaction.begin(); CATransaction.setDisableActions(true)
