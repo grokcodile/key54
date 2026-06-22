@@ -112,14 +112,16 @@ func renderKeycap() -> CGImage {
 }
 
 // ── 2. Fit the art into the macOS icon-grid squircle (1024 master) ───────────
+func makeCtx(_ px: Int) -> CGContext? {
+    CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0, space: cs, bitmapInfo: alpha)
+}
+
 func renderMaster(_ art: CGImage) -> CGImage {
     let canvas: CGFloat = 1024
     let rectSize: CGFloat = 824            // icon content area inside 1024
     let margin = (canvas - rectSize) / 2   // 100
     let cornerR = rectSize * 0.2237        // Apple squircle-ish radius
-    guard let ctx = CGContext(data: nil, width: Int(canvas), height: Int(canvas),
-                              bitsPerComponent: 8, bytesPerRow: 0, space: cs,
-                              bitmapInfo: alpha) else { exit(1) }
+    guard let ctx = makeCtx(Int(canvas)) else { exit(1) }
     ctx.clear(CGRect(x: 0, y: 0, width: canvas, height: canvas))
     ctx.interpolationQuality = .high
     let iconRect = CGRect(x: margin, y: margin, width: rectSize, height: rectSize)
@@ -133,9 +135,7 @@ func renderMaster(_ art: CGImage) -> CGImage {
 
 // ── 3. Emit one size from the master ─────────────────────────────────────────
 func write(_ master: CGImage, _ px: Int, to path: String) {
-    guard let ctx = CGContext(data: nil, width: px, height: px,
-                              bitsPerComponent: 8, bytesPerRow: 0, space: cs,
-                              bitmapInfo: alpha) else { return }
+    guard let ctx = makeCtx(px) else { return }
     ctx.interpolationQuality = .high
     ctx.clear(CGRect(x: 0, y: 0, width: px, height: px))
     ctx.draw(master, in: CGRect(x: 0, y: 0, width: px, height: px))

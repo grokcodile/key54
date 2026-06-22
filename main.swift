@@ -7,7 +7,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var tap: CFMachPort?
     private var previousApp: NSRunningApplication?
     private var settingsWindow: SettingsWindow?
-    let fallbackBundleID = "com.apple.Terminal"
 
     // Cached target so the app-switch notification path does no disk I/O.
     private var cachedURL: URL?
@@ -235,7 +234,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func resolvedBundleID() -> String {
         if let cachedBundleID { return cachedBundleID }
-        let id = Bundle(url: targetAppURL())?.bundleIdentifier ?? fallbackBundleID
+        let id = Bundle(url: targetAppURL())?.bundleIdentifier ?? "com.apple.Terminal"
         cachedBundleID = id
         return id
     }
@@ -565,7 +564,6 @@ final class StylePill: NSView {
 
 class SettingsWindow: NSWindow {
     weak var appDelegate: AppDelegate?
-    private var axPollTimer: Timer?
     private var tipPopover: NSPopover?
     private var stylePills: [StylePill] = []   // the two Animation Style buttons
     private let contentW: CGFloat = 460
@@ -615,7 +613,6 @@ class SettingsWindow: NSWindow {
 
     deinit {
         DistributedNotificationCenter.default().removeObserver(self)
-        axPollTimer?.invalidate()
     }
 
     // MARK: - Layout
@@ -706,12 +703,6 @@ class SettingsWindow: NSWindow {
 
             y -= bannerGap
 
-            axPollTimer?.invalidate()
-            axPollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                if AXIsProcessTrusted() { self?.refreshAxBanner() }
-            }
-        } else {
-            axPollTimer?.invalidate(); axPollTimer = nil
         }
 
         // Title
