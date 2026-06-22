@@ -900,6 +900,27 @@
                 border-top: 1px solid var(--divider);
                 border-bottom: 1px solid var(--divider);
             }
+            /* faint tag-name hint straddling each section's top line (skips hero/nav/footer) */
+            section[id] {
+                position: relative;
+            }
+            section[id]::before {
+                content: attr(id);
+                position: absolute;
+                top: 0;
+                right: 22px;
+                transform: translateY(-50%);
+                padding: 1px 7px;
+                background: var(--surface);
+                border: 1px solid var(--divider);
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 0.05em;
+                color: var(--dim);
+                pointer-events: none;
+                z-index: 4;
+            }
             .shot {
                 text-align: center;
                 padding: 52px 24px;
@@ -1065,38 +1086,35 @@
             }
             .crow {
                 display: flex;
-                gap: 18px;
+                flex-direction: column;
                 background: var(--surface);
                 border: 1px solid var(--border);
                 border-radius: 16px;
-                padding: 20px 22px;
+                overflow: hidden;
             }
-            .crow .ic {
-                flex: 0 0 auto;
-                width: 42px;
-                height: 42px;
-                border-radius: 11px;
-                background: rgba(0, 113, 227, 0.09);
-                color: var(--accent);
+            .chead {
                 display: flex;
                 align-items: center;
-                justify-content: center;
+                gap: 11px;
+                background: rgba(0, 113, 227, 0.1);
+                padding: 14px 20px;
+                color: var(--accent);
             }
-            .crow .ic svg {
+            .chead svg {
+                flex: 0 0 auto;
                 width: 22px;
                 height: 22px;
             }
-            .crow .cbody {
-                flex: 1;
-                min-width: 0;
-            }
             .crow h3 {
-                margin: 0 0 4px;
+                margin: 0;
                 font-size: 16px;
                 font-weight: 600;
+                color: var(--text);
             }
             .crow .apps {
-                margin: 0 0 10px;
+                margin: 0;
+                background: rgba(0, 113, 227, 0.045);
+                padding: 11px 20px;
                 font-size: 13px;
                 color: var(--dim);
             }
@@ -1111,18 +1129,56 @@
                 text-decoration-color: var(--accent);
             }
             .crow .how {
-                margin: 0 0 8px;
+                margin: 0;
+                padding: 15px 20px 0;
                 font-size: 14.5px;
                 color: var(--muted);
             }
+            .vsline {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 13px 20px;
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--accent);
+            }
+            .vsline::before,
+            .vsline::after {
+                content: "";
+                flex: 1;
+                height: 1px;
+                background: var(--divider);
+            }
             .crow .vs {
                 margin: 0;
+                padding: 0 20px 18px;
                 font-size: 14.5px;
                 color: var(--text);
             }
-            .crow .vs b {
+            .apps-label {
+                display: block;
+                margin-bottom: 4px;
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
                 color: var(--accent);
-                font-weight: 600;
+            }
+            .a11y-badge {
+                width: 54px;
+                height: 54px;
+                margin: 0 auto 16px;
+                border-radius: 15px;
+                background: rgba(0, 113, 227, 0.1);
+                color: var(--accent);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .a11y-badge svg {
+                width: 30px;
+                height: 30px;
             }
             .card .tag {
                 font-size: 12px;
@@ -1334,10 +1390,6 @@
                 .compare {
                     grid-template-columns: 1fr;
                 }
-                .crow {
-                    flex-direction: column;
-                    gap: 12px;
-                }
                 .foot-inner {
                     grid-template-columns: 1fr 1fr;
                     gap: 24px 16px;
@@ -1345,7 +1397,8 @@
                 .navinner {
                     padding: 10px 18px;
                 }
-                .navgh span {
+                .navgh span,
+                .navdl span {
                     display: none;
                 }
                 .links {
@@ -1376,7 +1429,7 @@
                         href="https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg>
-                        Download
+                        <span>Download</span>
                     </a>
                     <a class="navgh" href="https://github.com/grokcodile/key54">
                         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.78 0 12.29c0 5.21 3.44 9.63 8.2 11.19.6.11.82-.25.82-.56v-2c-3.34.72-4.04-1.58-4.04-1.58-.55-1.37-1.34-1.74-1.34-1.74-1.08-.73.08-.72.08-.72 1.2.08 1.83 1.21 1.83 1.21 1.07 1.8 2.81 1.28 3.5.98.1-.76.42-1.28.76-1.57-2.67-.3-5.47-1.31-5.47-5.84 0-1.29.47-2.34 1.24-3.17-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.21a11.5 11.5 0 0 1 6 0c2.29-1.53 3.3-1.21 3.3-1.21.66 1.65.24 2.87.12 3.17.77.83 1.24 1.88 1.24 3.17 0 4.54-2.81 5.54-5.49 5.83.43.37.81 1.1.81 2.22v3.29c0 .31.22.68.83.56C20.56 21.91 24 17.5 24 12.29 24 5.78 18.63.5 12 .5z"/></svg>
@@ -1393,12 +1446,15 @@
                         </button>
                         <div class="menupop" id="menupop" hidden>
                             <a href="#top">Home</a>
-                            <a href="#demo">Try it</a>
-                            <a href="#features">Why Key54</a>
-                            <a href="#uses">Uses</a>
+                            <a href="#demo">Demo</a>
+                            <a href="#features">Features</a>
+                            <a href="#examples">Examples</a>
+                            <a href="#comparison">Comparison</a>
+                            <a href="#accessibility">Accessibility</a>
                             <a href="#setup">Setup</a>
                             <a href="#faq">FAQ</a>
-                            <a href="#support">Support</a>
+                            <a href="#contribute">Contribute</a>
+                            <a href="#feedback">Feedback</a>
                         </div>
                     </div>
                 </div>
@@ -1726,100 +1782,14 @@
             </div>
         </section>
 
-        <section class="sec" id="different">
-            <h2>Not another launcher</h2>
-            <p class="lead">
-                Most tools help you find or cycle through your apps. Key54 does
-                the opposite: it gives the one app you live in a single
-                dedicated key — nothing to search, no list to cycle, no shortcut
-                to choose.
-            </p>
-            <div class="compare">
-                <div class="crow">
-                    <div class="ic">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
-                    </div>
-                    <div class="cbody">
-                        <h3>App grids &amp; all-apps browsers</h3>
-                        <p class="apps">Launchpad · Apps (macOS Tahoe) · <a href="https://launchosapp.com/" target="_blank" rel="noopener">LaunchOS</a> · <a href="https://apps.apple.com/app/launchie/id6752657468?mt=12" target="_blank" rel="noopener">Launchie</a> · <a href="https://apps.apple.com/us/app/appgrid-launcher/id6748853585" target="_blank" rel="noopener">AppGrid Launcher</a> · <a href="https://apps.apple.com/app/folder-peek/id1615988943" target="_blank" rel="noopener">Folder Peek</a></p>
-                        <p class="how">
-                            Fill the screen with every app you've installed as
-                            a paged grid, then scan the icons and click to
-                            launch.
-                        </p>
-                        <p class="vs">
-                            <b>Key54:</b> no wall of icons to open and scan — one
-                            key goes straight to the single app you live in.
-                        </p>
-                    </div>
-                </div>
-                <div class="crow">
-                    <div class="ic">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
-                    </div>
-                    <div class="cbody">
-                        <h3>Search launchers &amp; command palettes</h3>
-                        <p class="apps">Spotlight · <a href="https://www.raycast.com" target="_blank" rel="noopener">Raycast</a> · <a href="https://www.alfredapp.com" target="_blank" rel="noopener">Alfred</a> · <a href="https://www.obdev.at/products/launchbar/" target="_blank" rel="noopener">LaunchBar</a> · <a href="https://qsapp.com" target="_blank" rel="noopener">Quicksilver</a> · <a href="https://sol.ospfranco.com" target="_blank" rel="noopener">Sol</a> · <a href="https://www.monarchlauncher.com/" target="_blank" rel="noopener">Monarch</a></p>
-                        <p class="how">
-                            Pop open a search box, type a few letters, and pick
-                            your app from the results — usually alongside files,
-                            actions, and quick calculations.
-                        </p>
-                        <p class="vs">
-                            <b>Key54:</b> no box and no typing — one key goes
-                            straight to your app.
-                        </p>
-                    </div>
-                </div>
-                <div class="crow">
-                    <div class="ic">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="11" rx="2"/><path d="M9 19h10a2 2 0 0 0 2-2V9"/></svg>
-                    </div>
-                    <div class="cbody">
-                        <h3>App &amp; window switchers</h3>
-                        <p class="apps">⌘-Tab · Mission Control · <a href="https://alt-tab-macos.netlify.app" target="_blank" rel="noopener">AltTab</a> · <a href="https://contexts.co" target="_blank" rel="noopener">Contexts</a></p>
-                        <p class="how">
-                            Bring up everything you've got open as a strip or
-                            grid, then cycle through with the keyboard and land
-                            on the window you want.
-                        </p>
-                        <p class="vs">
-                            <b>Key54:</b> nothing to scan or choose — the same
-                            key always brings your app forward, and takes you
-                            back.
-                        </p>
-                    </div>
-                </div>
-                <div class="crow">
-                    <div class="ic">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
-                    </div>
-                    <div class="cbody">
-                        <h3>Direct-key app switchers</h3>
-                        <p class="apps"><a href="https://lowtechguys.com/rcmd/" target="_blank" rel="noopener">rcmd</a> · <a href="https://manico.im/" target="_blank" rel="noopener">Manico</a> · <a href="https://karabiner-elements.pqrs.org" target="_blank" rel="noopener">Karabiner-Elements</a> · <a href="https://www.hammerspoon.org" target="_blank" rel="noopener">Hammerspoon</a> · <a href="https://github.com/mikker/LeaderKey" target="_blank" rel="noopener">Leader Key</a> · <a href="https://www.keyboardmaestro.com" target="_blank" rel="noopener">Keyboard Maestro</a></p>
-                        <p class="how">
-                            Map a keyboard shortcut to a specific app — from a
-                            key plus a letter to a fully custom config. The
-                            closest idea to Key54.
-                        </p>
-                        <p class="vs">
-                            <b>Key54:</b> one key, no combo and no letter to
-                            remember — and the same hold both summons the app and
-                            returns you to where you were.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="band features" id="features">
+        <section class="features" id="features">
             <div class="wrap">
                 <h2>Why Key54?</h2>
                 <div class="whynotes">
                     <p class="whynote">
                         <code>54</code> is the macOS keycode for the right ⌘
                         key — rarely used and mostly idle, making it the perfect
-                        key to use, and the logical name for this app.
+                        key to modify, and a logical name for this app.
                     </p>
                 </div>
                 <div class="grid">
@@ -1871,8 +1841,8 @@
                         </div>
                         <h3>Any app</h3>
                         <p>
-                            Bind your terminal, browser, notes, or chat —
-                            whatever you live in.
+                            Bind your terminal, browser, notes, chat… or even
+                            just a shortcut that mutes your mic.
                         </p>
                     </div>
                     <div class="card">
@@ -1889,47 +1859,125 @@
             </div>
         </section>
 
-        <section class="sec" id="uses">
-            <h2>What people bind it to</h2>
+        <section class="band" id="examples">
+            <div class="sec">
+                <h2>What people bind it to</h2>
+                <p class="lead">
+                    Pick the one app you're always dropping into and back out of.
+                    The pattern is always the same: summon, do the thing, dismiss.
+                </p>
+                <div class="grid">
+                    <div class="card">
+                        <span class="tag">Developer</span>
+                        <h3>Your terminal</h3>
+                        <p>
+                            Run a quick install or git command mid-task, check a
+                            deploy — then one key back. The full terminal with every
+                            tab and session, not a stripped-down drawer.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <span class="tag">Researcher</span>
+                        <h3>Your browser</h3>
+                        <p>
+                            Reading or writing and need to look something up? One
+                            hold brings your real browsing session forward, one hold
+                            returns to the work — no new window, no search box.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <span class="tag">Note taker</span>
+                        <h3>Your notes</h3>
+                        <p>
+                            A thought worth capturing never means hunting for the
+                            right window. One hold to the notebook, jot it down, one
+                            hold back. The capture friction just disappears.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <span class="tag">Manager</span>
+                        <h3>Mail &amp; chat</h3>
+                        <p>
+                            Glance at a message and reply, then drop straight back
+                            into focus — without getting sucked in and losing the
+                            thread of deeper work.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="sec" id="comparison">
+            <h2>Not another launcher</h2>
             <p class="lead">
-                Pick the one app you're always dropping into and back out of.
-                The pattern is always the same: summon, do the thing, dismiss.
+                Key54 gives a single dedicated key to the app you most often
+                switch in and out of mid-task — no search, no list to cycle, no
+                shortcut to choose. Honestly, you can really use it for anything
+                you want. It's made to work alongside your favorite launcher,
+                not replace it.
             </p>
-            <div class="grid">
-                <div class="card">
-                    <span class="tag">Developer</span>
-                    <h3>Your terminal</h3>
-                    <p>
-                        Run a quick install or git command mid-task, check a
-                        deploy — then one key back. The full terminal with every
-                        tab and session, not a stripped-down drawer.
+            <div class="compare">
+                <div class="crow">
+                    <div class="chead">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
+                        <h3>App grids &amp; all-apps browsers</h3>
+                    </div>
+                    <p class="apps"><span class="apps-label">Popular tools</span>Launchpad · Apps (macOS Tahoe) · <a href="https://launchosapp.com/" target="_blank" rel="noopener">LaunchOS</a> · <a href="https://apps.apple.com/app/launchie/id6752657468?mt=12" target="_blank" rel="noopener">Launchie</a> · <a href="https://apps.apple.com/us/app/appgrid-launcher/id6748853585" target="_blank" rel="noopener">AppGrid Launcher</a> · <a href="https://apps.apple.com/app/folder-peek/id1615988943" target="_blank" rel="noopener">Folder Peek</a></p>
+                    <p class="how">
+                        Fill the screen with every app you've installed as a
+                        paged grid, then scan the icons and click to launch.
+                    </p>
+                    <div class="vsline">vs. Key54</div>
+                    <p class="vs">
+                        No grid to open and no wall of icons to scan through.
                     </p>
                 </div>
-                <div class="card">
-                    <span class="tag">Researcher</span>
-                    <h3>Your browser</h3>
-                    <p>
-                        Reading or writing and need to look something up? One
-                        hold brings your real browsing session forward, one hold
-                        returns to the work — no new window, no search box.
+                <div class="crow">
+                    <div class="chead">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                        <h3>Search &amp; command palettes</h3>
+                    </div>
+                    <p class="apps"><span class="apps-label">Popular tools</span>Spotlight · <a href="https://www.raycast.com" target="_blank" rel="noopener">Raycast</a> · <a href="https://www.alfredapp.com" target="_blank" rel="noopener">Alfred</a> · <a href="https://www.obdev.at/products/launchbar/" target="_blank" rel="noopener">LaunchBar</a> · <a href="https://qsapp.com" target="_blank" rel="noopener">Quicksilver</a> · <a href="https://sol.ospfranco.com" target="_blank" rel="noopener">Sol</a> · <a href="https://www.monarchlauncher.com/" target="_blank" rel="noopener">Monarch</a></p>
+                    <p class="how">
+                        Pop open a search box, type a few letters, and pick your
+                        app from the results — usually alongside files, actions,
+                        and quick calculations.
+                    </p>
+                    <div class="vsline">vs. Key54</div>
+                    <p class="vs">No box to summon and nothing to type.</p>
+                </div>
+                <div class="crow">
+                    <div class="chead">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="11" rx="2"/><path d="M9 19h10a2 2 0 0 0 2-2V9"/></svg>
+                        <h3>App &amp; window switchers</h3>
+                    </div>
+                    <p class="apps"><span class="apps-label">Popular tools</span>⌘-Tab · Mission Control · <a href="https://alt-tab-macos.netlify.app" target="_blank" rel="noopener">AltTab</a> · <a href="https://contexts.co" target="_blank" rel="noopener">Contexts</a></p>
+                    <p class="how">
+                        Bring up everything you've got open as a strip or grid,
+                        then cycle through with the keyboard and land on the
+                        window you want.
+                    </p>
+                    <div class="vsline">vs. Key54</div>
+                    <p class="vs">
+                        Nothing to cycle through or choose — and it works even
+                        when the app isn't already open.
                     </p>
                 </div>
-                <div class="card">
-                    <span class="tag">Note taker</span>
-                    <h3>Your notes</h3>
-                    <p>
-                        A thought worth capturing never means hunting for the
-                        right window. One hold to the notebook, jot it down, one
-                        hold back. The capture friction just disappears.
+                <div class="crow">
+                    <div class="chead">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+                        <h3>Direct-key app switchers</h3>
+                    </div>
+                    <p class="apps"><span class="apps-label">Popular tools</span><a href="https://lowtechguys.com/rcmd/" target="_blank" rel="noopener">rcmd</a> · <a href="https://manico.im/" target="_blank" rel="noopener">Manico</a> · <a href="https://karabiner-elements.pqrs.org" target="_blank" rel="noopener">Karabiner-Elements</a> · <a href="https://www.hammerspoon.org" target="_blank" rel="noopener">Hammerspoon</a> · <a href="https://github.com/mikker/LeaderKey" target="_blank" rel="noopener">Leader Key</a> · <a href="https://www.keyboardmaestro.com" target="_blank" rel="noopener">Keyboard Maestro</a></p>
+                    <p class="how">
+                        Map a keyboard shortcut to a specific app — from a key
+                        plus a letter to a fully custom config. The closest idea
+                        to Key54.
                     </p>
-                </div>
-                <div class="card">
-                    <span class="tag">Manager</span>
-                    <h3>Mail &amp; chat</h3>
-                    <p>
-                        Glance at a message and reply, then drop straight back
-                        into focus — without getting sucked in and losing the
-                        thread of deeper work.
+                    <div class="vsline">vs. Key54</div>
+                    <p class="vs">
+                        No chord and no letter to remember — one hold summons the
+                        app, the next sends you back.
                     </p>
                 </div>
             </div>
@@ -1937,6 +1985,9 @@
 
         <section class="band" id="accessibility">
             <div class="sec">
+                <div class="a11y-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="7.3" r="1.5" fill="currentColor" stroke="none"/><path d="M5.5 10.2c4.3 1.5 8.7 1.5 13 0"/><path d="M12 9.8v4.4"/><path d="M8.6 18.5 12 14.2l3.4 4.3"/></svg>
+                </div>
                 <h2>Easier on everyone</h2>
                 <p class="lead">
                     Key54 needs only a single key, held — no multi-finger chord,
@@ -2025,8 +2076,8 @@
             </div>
         </section>
 
-        <section class="sec support" id="support">
-            <h2>Free — support if you like it</h2>
+        <section class="sec support" id="contribute">
+            <h2>Free — chip in if you like it</h2>
             <p class="free">
                 Key54 is free and open source — no upsell, no account. If it's
                 earned a spot on your Mac, here are a few ways to help it keep
@@ -2105,10 +2156,14 @@
                 </div>
                 <div class="foot-col">
                     <h4>Explore</h4>
-                    <a href="#demo">Try it</a>
-                    <a href="#features">Why Key54</a>
-                    <a href="#uses">Uses</a>
+                    <a href="#demo">Demo</a>
+                    <a href="#features">Features</a>
+                    <a href="#examples">Examples</a>
+                    <a href="#comparison">Comparison</a>
+                    <a href="#accessibility">Accessibility</a>
+                    <a href="#setup">Setup</a>
                     <a href="#faq">FAQ</a>
+                    <a href="#feedback">Feedback</a>
                 </div>
                 <div class="foot-col">
                     <h4>Get it</h4>
@@ -2122,7 +2177,7 @@
                     >
                 </div>
                 <div class="foot-col">
-                    <h4>Support</h4>
+                    <h4>Contribute</h4>
                     <a href="https://github.com/grokcodile/key54"
                         >Star the project</a
                     >
