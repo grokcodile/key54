@@ -1060,9 +1060,10 @@
                 margin: 0 auto 34px;
             }
             .compare {
-                display: flex;
-                flex-direction: column;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
                 gap: 14px;
+                align-items: stretch;
             }
             .crow {
                 display: flex;
@@ -1330,6 +1331,9 @@
                     height: 92px;
                 }
                 .grid {
+                    grid-template-columns: 1fr;
+                }
+                .compare {
                     grid-template-columns: 1fr;
                 }
                 .crow {
@@ -1725,14 +1729,33 @@
             <div class="compare">
                 <div class="crow">
                     <div class="ic">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
+                    </div>
+                    <div class="cbody">
+                        <h3>App grids &amp; all-apps browsers</h3>
+                        <p class="apps">Launchpad · Apps (macOS Tahoe) · <a href="https://launchosapp.com/" target="_blank" rel="noopener">LaunchOS</a> · <a href="https://apps.apple.com/app/launchie/id6752657468?mt=12" target="_blank" rel="noopener">Launchie</a> · <a href="https://apps.apple.com/us/app/appgrid-launcher/id6748853585" target="_blank" rel="noopener">AppGrid Launcher</a> · <a href="https://apps.apple.com/app/folder-peek/id1615988943" target="_blank" rel="noopener">Folder Peek</a></p>
+                        <p class="how">
+                            Fill the screen with every app you've installed as
+                            a paged grid, then scan the icons and click to
+                            launch.
+                        </p>
+                        <p class="vs">
+                            <b>Key54:</b> no wall of icons to open and scan — one
+                            key goes straight to the single app you live in.
+                        </p>
+                    </div>
+                </div>
+                <div class="crow">
+                    <div class="ic">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
                     </div>
                     <div class="cbody">
                         <h3>Search launchers &amp; command palettes</h3>
-                        <p class="apps">Spotlight · <a href="https://www.raycast.com" target="_blank" rel="noopener">Raycast</a> · <a href="https://www.alfredapp.com" target="_blank" rel="noopener">Alfred</a> · <a href="https://www.obdev.at/products/launchbar/" target="_blank" rel="noopener">LaunchBar</a> · <a href="https://qsapp.com" target="_blank" rel="noopener">Quicksilver</a> · <a href="https://sol.ospfranco.com" target="_blank" rel="noopener">Sol</a></p>
+                        <p class="apps">Spotlight · <a href="https://www.raycast.com" target="_blank" rel="noopener">Raycast</a> · <a href="https://www.alfredapp.com" target="_blank" rel="noopener">Alfred</a> · <a href="https://www.obdev.at/products/launchbar/" target="_blank" rel="noopener">LaunchBar</a> · <a href="https://qsapp.com" target="_blank" rel="noopener">Quicksilver</a> · <a href="https://sol.ospfranco.com" target="_blank" rel="noopener">Sol</a> · <a href="https://www.monarchlauncher.com/" target="_blank" rel="noopener">Monarch</a></p>
                         <p class="how">
-                            Open a box, type a few letters, and pick from a list
-                            of results — apps, files, actions, anything.
+                            Pop open a search box, type a few letters, and pick
+                            your app from the results — usually alongside files,
+                            actions, and quick calculations.
                         </p>
                         <p class="vs">
                             <b>Key54:</b> no box and no typing — one key goes
@@ -1748,8 +1771,9 @@
                         <h3>App &amp; window switchers</h3>
                         <p class="apps">⌘-Tab · Mission Control · <a href="https://alt-tab-macos.netlify.app" target="_blank" rel="noopener">AltTab</a> · <a href="https://contexts.co" target="_blank" rel="noopener">Contexts</a></p>
                         <p class="how">
-                            Show everything that's open as a list or grid, so you
-                            cycle through and pick the one you want.
+                            Bring up everything you've got open as a strip or
+                            grid, then cycle through with the keyboard and land
+                            on the window you want.
                         </p>
                         <p class="vs">
                             <b>Key54:</b> nothing to scan or choose — the same
