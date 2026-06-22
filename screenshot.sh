@@ -30,3 +30,6 @@ VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.pl
 if [ -n "$VERSION" ]; then
     sed -i '' -E "s/(settings\.png\?v=)[0-9.]+/\1${VERSION}/" README.md
 fi
+
+# Mirror the shot into the GitHub Pages site so the landing page stays current.
+[ -d docs ] && cp "$OUT" docs/settings.png

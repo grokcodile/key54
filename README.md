@@ -1,30 +1,25 @@
-<div align="center">
-
-<img src="screenshots/icon_readme.png" width="128" alt="Key54 icon">
-
 # Key54
-
-*Your right-hand ⌘.*
-
-**Hold the Command (⌘) key on the right side of your keyboard to summon one chosen app — hold it again to switch back to whatever you were doing.**
 
 [![Latest release](https://img.shields.io/github/v/release/grokcodile/key54?label=download&sort=semver)](https://github.com/grokcodile/key54/releases/latest)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/grokcodile/key54)](LICENSE)
 
-[Download](#download) · [Features](#features) · [Hold Duration](#hold-duration) · [Build](#build) · [Tip Jar](#tip-jar)
+**Key54** is a tiny macOS utility that binds one app of your choice to the right Command key (keycode 54). Hold the right ⌘ to summon that app; hold it again to switch back to what you were doing. A built-in hold delay keeps quick taps and your normal right-⌘ shortcuts working as usual.
 
-<img src="screenshots/settings.png?v=1.12" width="440" alt="Key54 settings window">
+It runs as a background agent — no Dock icon, no menu bar item — and starts at login.
 
-</div>
+> **Overview, usage examples, FAQ, and support:** <https://grokcodile.github.io/key54>
 
-Key54 isn't another app library switcher, launcher, or palette. It doesn't try to replace ⌘-Tab, Mission Control, or Spotlight, and it doesn't pile on the features that tools like Raycast, Alfred, LaunchBar, rcmd, or Monarch already do well. It does exactly one thing: a single, dedicated key for the *one* app you reach for constantly.
+![Key54 settings window](screenshots/settings.png?v=1.12)
 
-There's nothing to launch, no fuzzy search, no list of shortcuts to memorize, and no chords. You pick the app once; after that it's pure muscle memory — like a push-to-talk button for your terminal, notes, browser, or chat. It claims the otherwise-dead *gesture* of holding the right ⌘ key, so quick taps and normal right-⌘ shortcuts keep working exactly as before (unless you opt into the Instant preset) — you give up nothing.
+## Features
 
-And it's calm by design. Instead of racing to ⌘-Tab across your desktop and back, you hold the key and it charges for a beat before it fires — a small, deliberate pause that lets your brain settle into the switch (dial it to Instant if you'd rather skip it). One key, one app, no chord to remember: a context switch that gives you a moment to breathe.
-
-It's fast, tiny (~1 MB download), uses almost zero system resources, and stays out of the way: no Dock icon, no menu bar clutter.
+- Hold right-⌘ to toggle one chosen app in and out of focus; hold again to return.
+- Works with any application.
+- **Hold Duration** presets (Instant / Short / Medium / Long / Custom) with a built-in Key Delay, so quick taps and normal right-⌘ shortcuts aren't hijacked.
+- A charge animation on a Liquid Glass bezel (macOS 26+; frosted glass on older systems), in two styles — **Power Up** and **Level Up** — following your System Settings accent color.
+- Correctly returns you to the previous app, including full-screen apps and apps with no open windows.
+- Runs silently as a background agent and starts at login.
 
 ## Download
 
@@ -41,55 +36,6 @@ Open the `.dmg` and drag **Key54** into your `Applications` folder.
 > - **Terminal (any version):** `xattr -dr com.apple.quarantine /Applications/Key54.app`
 >
 > Prefer no warning at all? [Build from source](#build) — a locally built app isn't quarantined and just runs.
-
-## Features
-
-- Hold right-⌘ to toggle a single chosen app in and out of focus.
-- **One key, held — no chord.** No ⌘-key combination, no rapid tapping, no sequence to remember; just hold one key. Pure muscle memory, and a gentler reach than ⌘-Space or ⌘-Tab (see [Accessibility](#accessibility)).
-- Works with **any** application of your choice.
-- **Hold Duration presets** (Instant / Short / Medium / Long / Custom) with a built-in **Key Delay**, so a quick press or normal right-⌘ shortcut is never hijacked. **Instant** skips the animation entirely and switches the moment you press; **Custom** lets you tune the timings yourself.
-- A subtle **charge animation** plays as you hold and dissolves as it switches, on a Liquid Glass bezel (macOS 26+; frosted glass on older systems). Pick from two [Animation Styles](#animation-style) — **Power Up** (a glowing ring) or **Level Up** (a filling level) — both following the accent color you've chosen in System Settings.
-- Correctly returns you to the previous app — including full-screen apps and apps with no open windows.
-- Runs silently as a background agent (no Dock icon, no menu bar), and starts at login.
-
-## Usage Examples
-
-Pick the one app you're *always* dropping into and back out of, bind it with Key54, and forget the keyboard gymnastics.
-
-- **Developer** — bind the terminal of your choice (Terminal.app, Warp, Ghostty, iTerm). It's one key away from anywhere: `brew install` something mid-task, check a deploy script, fire off a quick `git` command — then one key back to what you were doing. And it's the **full app**, with all its tabs and sessions, not a stripped-down dropdown drawer, global hotkey window, or limited notch gimmick.
-
-- **Researcher** — bind your browser (Safari, Chrome, Arc). Reading a doc or writing something and need to look a thing up? One tap brings the real browsing session forward, one tap returns to the work — no new window, no "search the web" box.
-
-- **Note Taker** — bind your favorite notes app (Notes, Obsidian, Bear). A thought worth capturing never means hunting for the right window: one tap to the notebook, jot it down, one tap back. The capture friction basically disappears.
-
-- **Manager** — bind your email or chat client (Mail, Messages, Slack). Glance at a message and reply, then drop straight back into focus — without getting sucked in and losing the thread of deeper work.
-
-Whatever you assign as your **Key54**, the pattern is the same: **summon → do the thing → dismiss** — without ever breaking stride or wondering which shortcut to press.
-
-## Accessibility
-
-Key54 needs only a **single key, held** — the right ⌘ key on its own, no multi-finger chord, no rapid tapping, no sequence to remember. For anyone who finds combinations like ⌘-Space or ⌘-Tab hard to reach or hold, holding one key to bring an app forward — and holding it again to go back — can be a genuinely simpler way to move between apps.
-
-The timing is forgiving, too: a quick or accidental press does nothing, and you can let go any time before the animation fills to cancel. Key54 was built as a convenience, but the same no-chord, no-reach interaction turns out to be an accessibility aid — and honestly, a little easier for everyone.
-
-## Hold Duration
-
-The slider in settings controls how long you hold the right ⌘ key before the switch fires — and how much ceremony comes with it. Short, Medium, and Long each start with a brief **Key Delay** (nothing appears yet, and letting go does nothing), followed by the charge animation you can watch fill. Release any time before it completes and the switch is cancelled.
-
-| Preset | Hold to trigger | Behavior |
-| --- | --- | --- |
-| **Instant** | A press — no hold | Completely hands the right ⌘ key to Key54: no hold, no delay, no animation — the moment you press, you've switched. Quick taps and right-⌘ shortcuts trigger it too, so pick this only if you're dedicating the key. |
-| **Short** | ~0.5 s | A snappy switch that still leaves normal right-⌘ shortcuts usable — anything shorter than the half-second Key Delay is ignored. No charge animation; the app's icon simply appears and dissolves into the switch. |
-| **Medium** *(default)* | ~0.9 s (0.5 s Key Delay + 0.4 s animation) | The best mix: enough delay to cancel the switch early just by letting go, a smooth transition that supports a more graceful mental shift between tasks, and still quick and responsive. |
-| **Long** | ~1.3 s (0.7 s Key Delay + 0.6 s animation) | An even more generous, deliberate task-switching experience — maximum time to watch it fill and change your mind. |
-| **Custom** | Your call — up to 1.5 s + 1.5 s | Build your own: **Key Delay** and **Animation Length** sliders appear in a panel below, adjustable in 0.05 s steps — and your values are remembered, even while trying other presets. A zero Animation Length gives Short's icon-only flash; zero both and it behaves like Instant. |
-
-## Animation Style
-
-Pick how the hold is visualized while it charges. It only affects the presets that actually animate (Short / Medium / Long / Custom), and both styles follow your System Settings accent color on the Liquid Glass bezel:
-
-- **Power Up** — the chosen app's icon inside a glowing accent ring that sweeps to full as you hold. Minimal and quick to read.
-- **Level Up** — a larger icon over a glass that fills with your accent color (with a soft glow at the surface) as you hold, like a level meter topping off. A touch more playful, and easy to read at a glance.
 
 ## Requirements
 
@@ -116,6 +62,25 @@ This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc c
 5. Click **Done**. Key54 keeps running in the background (and starts automatically at login).
 
 To change the app or settings later, just open Key54 again from `Applications`.
+
+## Hold Duration
+
+The slider in settings controls how long you hold the right ⌘ key before the switch fires — and how much ceremony comes with it. Short, Medium, and Long each start with a brief **Key Delay** (nothing appears yet, and letting go does nothing), followed by the charge animation you can watch fill. Release any time before it completes and the switch is cancelled.
+
+| Preset | Hold to trigger | Behavior |
+| --- | --- | --- |
+| **Instant** | A press — no hold | Completely hands the right ⌘ key to Key54: no hold, no delay, no animation — the moment you press, you've switched. Quick taps and right-⌘ shortcuts trigger it too, so pick this only if you're dedicating the key. |
+| **Short** | ~0.5 s | A snappy switch that still leaves normal right-⌘ shortcuts usable — anything shorter than the half-second Key Delay is ignored. No charge animation; the app's icon simply appears and dissolves into the switch. |
+| **Medium** *(default)* | ~0.9 s (0.5 s Key Delay + 0.4 s animation) | The best mix: enough delay to cancel the switch early just by letting go, a smooth transition, and still quick and responsive. |
+| **Long** | ~1.3 s (0.7 s Key Delay + 0.6 s animation) | A more generous, deliberate task-switch — maximum time to watch it fill and change your mind. |
+| **Custom** | Your call — up to 1.5 s + 1.5 s | Build your own: **Key Delay** and **Animation Length** sliders appear in a panel below, adjustable in 0.05 s steps — and your values are remembered, even while trying other presets. A zero Animation Length gives Short's icon-only flash; zero both and it behaves like Instant. |
+
+## Animation Style
+
+Pick how the hold is visualized while it charges. It only affects the presets that actually animate (Short / Medium / Long / Custom), and both styles follow your System Settings accent color on the Liquid Glass bezel:
+
+- **Power Up** — the chosen app's icon inside a glowing accent ring that sweeps to full as you hold.
+- **Level Up** — a larger icon over a glass that fills with your accent color as you hold, like a level meter topping off.
 
 ## Uninstall
 
@@ -155,19 +120,11 @@ Key54 installs a `CGEventTap` that watches `flagsChanged` events for the right C
 
 **54** is the macOS keycode for the right Command key — the exact key this app
 claims. (You can see it in the source: the event tap watches for `keycode 54`.)
-So **Key54** is literally that — the key, named by its number; the app's whole
-job written as a coordinate.
+So **Key54** is literally that — the key, named by its number.
 
 ## Notes
 
 This app uses a global event tap and controls other applications, which is incompatible with the Mac App Store sandbox — it's distributed directly (Developer ID + notarization, or built from source).
-
-## Tip Jar
-
-Key54 is free and open source. If it earns a spot on your Mac, please support its development:
-
-- ☕ [Buy me a coffee on Ko-fi](https://ko-fi.com/grokcodile)
-- ❤️ [Sponsor me on GitHub](https://github.com/sponsors/grokcodile)
 
 ## License
 
