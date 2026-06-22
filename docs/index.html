@@ -83,7 +83,17 @@
                 display: flex;
                 align-items: center;
                 gap: 10px;
+                background: none;
+                border: 0;
+                padding: 0;
+                font: inherit;
                 font-weight: 600;
+                color: inherit;
+                cursor: pointer;
+                transition: opacity 0.12s ease;
+            }
+            nav .brand:hover {
+                opacity: 0.6;
             }
             nav .brand img {
                 width: 26px;
@@ -134,29 +144,9 @@
             .navmenu {
                 position: relative;
             }
-            .menubtn {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 34px;
-                height: 34px;
-                padding: 0;
-                background: none;
-                border: 1px solid var(--border);
-                border-radius: 9px;
-                color: var(--text);
-                cursor: pointer;
-            }
-            .menubtn:hover {
-                background: var(--surface2);
-            }
-            .menubtn svg {
-                width: 18px;
-                height: 18px;
-            }
             .menupop {
                 position: absolute;
-                right: 0;
+                left: 0;
                 top: calc(100% + 8px);
                 min-width: 164px;
                 background: var(--surface);
@@ -937,8 +927,10 @@
                 max-width: 460px;
             }
             .shot img {
+                display: block;
                 width: 100%;
                 max-width: 420px;
+                margin: 4px auto 28px;
                 border-radius: 16px;
                 border: 1px solid var(--border);
             }
@@ -1165,21 +1157,6 @@
                 letter-spacing: 0.04em;
                 color: var(--accent);
             }
-            .a11y-badge {
-                width: 54px;
-                height: 54px;
-                margin: 0 auto 16px;
-                border-radius: 15px;
-                background: rgba(0, 113, 227, 0.1);
-                color: var(--accent);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .a11y-badge svg {
-                width: 30px;
-                height: 30px;
-            }
             .card .tag {
                 font-size: 12px;
                 font-weight: 700;
@@ -1189,19 +1166,26 @@
             }
             /* static version of the demo's app HUD, holding a real app icon */
             .usehud {
-                width: 50px;
-                height: 50px;
-                margin: 12px 0 14px;
-                border-radius: 14px;
+                position: relative;
+                width: 68px;
+                height: 68px;
+                margin: 12px 0 16px;
+                border-radius: 18px;
                 background: rgba(20, 20, 26, 0.85);
                 box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
                 display: flex;
                 align-items: center;
                 justify-content: center;
             }
+            .usehud .ring {
+                position: absolute;
+                inset: 0;
+            }
             .usehud img {
-                width: 36px;
-                height: 36px;
+                position: relative;
+                z-index: 1;
+                width: 40px;
+                height: 40px;
                 display: block;
             }
             .support {
@@ -1405,10 +1389,32 @@
     <body>
         <nav>
             <div class="navinner">
-                <div class="brand">
-                    <img src="icon.png" alt="Key54 icon" /> Key54
+                <div class="navmenu">
+                    <button
+                        class="brand"
+                        id="menubtn"
+                        type="button"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                    >
+                        <img src="icon.png" alt="Key54 icon" /> Key54
+                    </button>
+                    <div class="menupop" id="menupop" hidden>
+                        <a href="#top">Download</a>
+                        <a href="#demo">Demo</a>
+                        <a href="#features">Features</a>
+                        <a href="#examples">Examples</a>
+                        <a href="#comparison">Comparison</a>
+                        <a href="#setup">Setup</a>
+                        <a href="#contribute">Contribute</a>
+                        <a href="#feedback">Feedback</a>
+                    </div>
                 </div>
                 <div class="links">
+                    <a class="navgh" href="https://github.com/grokcodile/key54">
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.78 0 12.29c0 5.21 3.44 9.63 8.2 11.19.6.11.82-.25.82-.56v-2c-3.34.72-4.04-1.58-4.04-1.58-.55-1.37-1.34-1.74-1.34-1.74-1.08-.73.08-.72.08-.72 1.2.08 1.83 1.21 1.83 1.21 1.07 1.8 2.81 1.28 3.5.98.1-.76.42-1.28.76-1.57-2.67-.3-5.47-1.31-5.47-5.84 0-1.29.47-2.34 1.24-3.17-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.21a11.5 11.5 0 0 1 6 0c2.29-1.53 3.3-1.21 3.3-1.21.66 1.65.24 2.87.12 3.17.77.83 1.24 1.88 1.24 3.17 0 4.54-2.81 5.54-5.49 5.83.43.37.81 1.1.81 2.22v3.29c0 .31.22.68.83.56C20.56 21.91 24 17.5 24 12.29 24 5.78 18.63.5 12 .5z"/></svg>
+                        <span>View on GitHub</span>
+                    </a>
                     <a
                         class="navdl"
                         href="https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
@@ -1416,31 +1422,6 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg>
                         <span>Download</span>
                     </a>
-                    <a class="navgh" href="https://github.com/grokcodile/key54">
-                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.78 0 12.29c0 5.21 3.44 9.63 8.2 11.19.6.11.82-.25.82-.56v-2c-3.34.72-4.04-1.58-4.04-1.58-.55-1.37-1.34-1.74-1.34-1.74-1.08-.73.08-.72.08-.72 1.2.08 1.83 1.21 1.83 1.21 1.07 1.8 2.81 1.28 3.5.98.1-.76.42-1.28.76-1.57-2.67-.3-5.47-1.31-5.47-5.84 0-1.29.47-2.34 1.24-3.17-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.21a11.5 11.5 0 0 1 6 0c2.29-1.53 3.3-1.21 3.3-1.21.66 1.65.24 2.87.12 3.17.77.83 1.24 1.88 1.24 3.17 0 4.54-2.81 5.54-5.49 5.83.43.37.81 1.1.81 2.22v3.29c0 .31.22.68.83.56C20.56 21.91 24 17.5 24 12.29 24 5.78 18.63.5 12 .5z"/></svg>
-                        <span>View on GitHub</span>
-                    </a>
-                    <div class="navmenu">
-                        <button
-                            class="menubtn"
-                            id="menubtn"
-                            aria-label="Jump to section"
-                            aria-expanded="false"
-                        >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
-                        </button>
-                        <div class="menupop" id="menupop" hidden>
-                            <a href="#top">Home</a>
-                            <a href="#demo">Demo</a>
-                            <a href="#features">Features</a>
-                            <a href="#examples">Examples</a>
-                            <a href="#comparison">Comparison</a>
-                            <a href="#accessibility">Accessibility</a>
-                            <a href="#setup">Setup</a>
-                            <a href="#feedback">Feedback</a>
-                            <a href="#contribute">Contribute</a>
-                        </div>
-                    </div>
                 </div>
             </div>
         </nav>
@@ -1781,10 +1762,11 @@
                         <div class="ic">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="5"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
                         </div>
-                        <h3>One key, held</h3>
+                        <h3>One key, one app</h3>
                         <p>
-                            No chord, no rapid taps, no palette to search. Pure
-                            muscle memory.
+                            Hold the right ⌘ and the one app you bind comes
+                            forward — no chord, no rapid taps, no palette to
+                            search. Pure muscle memory.
                         </p>
                     </div>
                     <div class="card">
@@ -1821,22 +1803,24 @@
                     </div>
                     <div class="card">
                         <div class="ic">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
-                        </div>
-                        <h3>Any app</h3>
-                        <p>
-                            Bind your terminal, browser, notes, chat… or even
-                            just a shortcut that mutes your mic.
-                        </p>
-                    </div>
-                    <div class="card">
-                        <div class="ic">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" stroke-dasharray="2.5 3.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/></svg>
                         </div>
                         <h3>Tiny &amp; invisible</h3>
                         <p>
                             About 1 MB, no Dock icon, no menu bar clutter.
                             Starts at login. Stays out of the way.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="ic">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="7.3" r="1.5" fill="currentColor" stroke="none"/><path d="M5.5 10.2c4.3 1.5 8.7 1.5 13 0"/><path d="M12 9.8v4.4"/><path d="M8.6 18.5 12 14.2l3.4 4.3"/></svg>
+                        </div>
+                        <h3>Easier on everyone</h3>
+                        <p>
+                            For anyone who finds chords like ⌘-Space or ⌘-Tab
+                            hard to reach or hold, one forgiving key is a
+                            genuinely simpler way to move between apps — a real
+                            accessibility win.
                         </p>
                     </div>
                 </div>
@@ -1854,6 +1838,7 @@
                     <div class="card">
                         <span class="tag">Developer</span>
                         <div class="usehud">
+                            <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="23" fill="none" stroke="#3a93ff" stroke-width="2.5"/></svg>
                             <img src="app-terminal.png" alt="Terminal" />
                         </div>
                         <h3>Your terminal</h3>
@@ -1866,6 +1851,7 @@
                     <div class="card">
                         <span class="tag">Researcher</span>
                         <div class="usehud">
+                            <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="23" fill="none" stroke="#3a93ff" stroke-width="2.5"/></svg>
                             <img src="app-safari.png" alt="Safari" />
                         </div>
                         <h3>Your browser</h3>
@@ -1878,6 +1864,7 @@
                     <div class="card">
                         <span class="tag">Note taker</span>
                         <div class="usehud">
+                            <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="23" fill="none" stroke="#3a93ff" stroke-width="2.5"/></svg>
                             <img src="app-notes.png" alt="Notes" />
                         </div>
                         <h3>Your notes</h3>
@@ -1890,6 +1877,7 @@
                     <div class="card">
                         <span class="tag">Manager</span>
                         <div class="usehud">
+                            <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="23" fill="none" stroke="#3a93ff" stroke-width="2.5"/></svg>
                             <img src="app-mail.png" alt="Mail" />
                         </div>
                         <h3>Your email</h3>
@@ -1897,6 +1885,32 @@
                             Glance at a message and reply, then drop straight back
                             into focus — without getting sucked in and losing the
                             thread of deeper work.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <span class="tag">Teleconferencer</span>
+                        <div class="usehud">
+                            <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="23" fill="none" stroke="#3a93ff" stroke-width="2.5"/></svg>
+                            <img src="app-shortcuts.png" alt="Shortcuts" />
+                        </div>
+                        <h3>Your mic</h3>
+                        <p>
+                            Back-to-back calls? Bind a Shortcut that toggles your
+                            mic — one hold to mute or unmute, no hunting for the
+                            meeting window.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <span class="tag">Knowledge worker</span>
+                        <div class="usehud">
+                            <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="23" fill="none" stroke="#3a93ff" stroke-width="2.5"/></svg>
+                            <img src="app-claude.png" alt="Claude" />
+                        </div>
+                        <h3>Your assistant</h3>
+                        <p>
+                            Bind Claude or your AI chatbot of choice — one hold
+                            to ask a question or paste a snippet, one hold back
+                            to your work with the answer.
                         </p>
                     </div>
                 </div>
@@ -1979,31 +1993,10 @@
             </div>
         </section>
 
-        <section class="band" id="accessibility">
-            <div class="sec">
-                <div class="a11y-badge">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="7.3" r="1.5" fill="currentColor" stroke="none"/><path d="M5.5 10.2c4.3 1.5 8.7 1.5 13 0"/><path d="M12 9.8v4.4"/><path d="M8.6 18.5 12 14.2l3.4 4.3"/></svg>
-                </div>
-                <h2>Easier on everyone</h2>
-                <p class="lead">
-                    Key54 needs only a single key, held — no multi-finger chord,
-                    no rapid tapping, no sequence to remember.
-                </p>
-                <p class="lead">
-                    For anyone who finds combinations like ⌘-Space or ⌘-Tab hard
-                    to reach or hold, one key to bring an app forward — and again
-                    to go back — is a genuinely simpler way to move between apps.
-                    The timing is forgiving, too: a quick or accidental press
-                    does nothing, and you can let go before it fires to cancel.
-                    Built as a convenience, it turns out to be a real
-                    accessibility aid.
-                </p>
-            </div>
-        </section>
-
-        <section id="setup">
+        <section class="band" id="setup">
             <div class="shot">
                 <h2>One window. Simple setup.</h2>
+                <img src="settings.png" alt="Key54 settings window" />
                 <div class="stepper">
                     <div class="seg active" data-text="Pick the app you context-switch to most often.">Step 1</div>
                     <div class="seg" data-text="Select a hold duration you find comfortable.">Step 2</div>
@@ -2011,7 +2004,30 @@
                     <div class="seg check" data-text="Done — you're all set!">✓</div>
                 </div>
                 <div class="stepdesc" id="stepdesc">Pick the app you context-switch to most often.</div>
-                <img src="settings.png" alt="Key54 settings window" />
+            </div>
+        </section>
+
+        <section class="sec support" id="contribute">
+            <h2>Free — chip in if you like it</h2>
+            <p class="free">
+                Key54 is free and open source — no upsell, no account. If it's
+                earned a spot on your Mac, here are a few ways to help it keep
+                going. A star helps more people find it; tips go toward
+                development costs.
+            </p>
+            <div class="cta-row">
+                <a class="btn star" href="https://github.com/grokcodile/key54">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.26 6.85.82-5.06 4.66 1.36 6.74L12 17.77 5.99 21.24l1.36-6.74-5.06-4.66 6.85-.82z"/></svg>
+                    Star on GitHub
+                </a>
+                <a class="btn" href="https://ko-fi.com/grokcodile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h12v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><line x1="8" y1="3.5" x2="8" y2="5.5"/><line x1="12" y1="3.5" x2="12" y2="5.5"/></svg>
+                    Buy me a coffee
+                </a>
+                <a class="btn" href="https://github.com/sponsors/grokcodile">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.2-8.06C1.1 10.1 2.2 6.5 5.4 6.5c2 0 3.3 1.2 6.6 4.3 3.3-3.1 4.6-4.3 6.6-4.3 3.2 0 4.3 3.6 2.6 6.44C18.7 16.65 12 21 12 21z"/></svg>
+                    Sponsor
+                </a>
             </div>
         </section>
 
@@ -2058,30 +2074,6 @@
             </div>
         </section>
 
-        <section class="sec support" id="contribute">
-            <h2>Free — chip in if you like it</h2>
-            <p class="free">
-                Key54 is free and open source — no upsell, no account. If it's
-                earned a spot on your Mac, here are a few ways to help it keep
-                going. A star helps more people find it; tips go toward
-                development costs.
-            </p>
-            <div class="cta-row">
-                <a class="btn star" href="https://github.com/grokcodile/key54">
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.26 6.85.82-5.06 4.66 1.36 6.74L12 17.77 5.99 21.24l1.36-6.74-5.06-4.66 6.85-.82z"/></svg>
-                    Star on GitHub
-                </a>
-                <a class="btn" href="https://ko-fi.com/grokcodile">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h12v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><line x1="8" y1="3.5" x2="8" y2="5.5"/><line x1="12" y1="3.5" x2="12" y2="5.5"/></svg>
-                    Buy me a coffee
-                </a>
-                <a class="btn" href="https://github.com/sponsors/grokcodile">
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.2-8.06C1.1 10.1 2.2 6.5 5.4 6.5c2 0 3.3 1.2 6.6 4.3 3.3-3.1 4.6-4.3 6.6-4.3 3.2 0 4.3 3.6 2.6 6.44C18.7 16.65 12 21 12 21z"/></svg>
-                    Sponsor
-                </a>
-            </div>
-        </section>
-
         <footer>
             <div class="foot-inner">
                 <div class="foot-brand">
@@ -2099,7 +2091,6 @@
                     <a href="#features">Features</a>
                     <a href="#examples">Examples</a>
                     <a href="#comparison">Comparison</a>
-                    <a href="#accessibility">Accessibility</a>
                     <a href="#setup">Setup</a>
                     <a href="#feedback">Feedback</a>
                 </div>
@@ -2398,7 +2389,7 @@
                     ).observe(document.querySelector(".stepper"));
                 }
 
-                // Sticky-nav hamburger: toggle the section jump-list.
+                // Sticky-nav: clicking the logo toggles the section jump-list.
                 var menubtn = document.getElementById("menubtn"),
                     menupop = document.getElementById("menupop");
                 if (menubtn && menupop) {
