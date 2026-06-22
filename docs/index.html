@@ -1187,37 +1187,21 @@
                 text-transform: uppercase;
                 letter-spacing: 0.03em;
             }
-            .faq-item {
-                border-bottom: 1px solid var(--divider);
+            /* static version of the demo's app HUD, holding a real app icon */
+            .usehud {
+                width: 50px;
+                height: 50px;
+                margin: 12px 0 14px;
+                border-radius: 14px;
+                background: rgba(20, 20, 26, 0.85);
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
-            .faq-item summary {
-                list-style: none;
-                cursor: pointer;
-                padding: 17px 32px 17px 0;
-                font-size: 16px;
-                font-weight: 600;
-                position: relative;
-            }
-            .faq-item summary::-webkit-details-marker {
-                display: none;
-            }
-            .faq-item summary::after {
-                content: "+";
-                position: absolute;
-                right: 4px;
-                top: 14px;
-                font-size: 20px;
-                font-weight: 400;
-                color: var(--dim);
-            }
-            .faq-item[open] summary::after {
-                content: "\2013";
-            }
-            .faq-item .faq-a {
-                margin: 0;
-                padding: 0 32px 18px 0;
-                color: var(--muted);
-                font-size: 15px;
+            .usehud svg {
+                width: 34px;
+                height: 34px;
             }
             .support {
                 text-align: center;
@@ -1452,9 +1436,8 @@
                             <a href="#comparison">Comparison</a>
                             <a href="#accessibility">Accessibility</a>
                             <a href="#setup">Setup</a>
-                            <a href="#faq">FAQ</a>
-                            <a href="#contribute">Contribute</a>
                             <a href="#feedback">Feedback</a>
+                            <a href="#contribute">Contribute</a>
                         </div>
                     </div>
                 </div>
@@ -1869,6 +1852,9 @@
                 <div class="grid">
                     <div class="card">
                         <span class="tag">Developer</span>
+                        <div class="usehud">
+                            <svg viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" rx="8" fill="#26262b" stroke="rgba(255,255,255,.16)"/><path d="M10 13l5 4-5 4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="17" y1="22" x2="25" y2="22" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+                        </div>
                         <h3>Your terminal</h3>
                         <p>
                             Run a quick install or git command mid-task, check a
@@ -1878,6 +1864,9 @@
                     </div>
                     <div class="card">
                         <span class="tag">Researcher</span>
+                        <div class="usehud">
+                            <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="#1e90ff"/><circle cx="18" cy="18" r="12.5" fill="#f1f5f9"/><g stroke="#9aa7b4" stroke-width="1"><line x1="18" y1="6.5" x2="18" y2="8.5"/><line x1="18" y1="27.5" x2="18" y2="29.5"/><line x1="6.5" y1="18" x2="8.5" y2="18"/><line x1="27.5" y1="18" x2="29.5" y2="18"/></g><polygon points="18,18 25,11 19,17" fill="#f5333f"/><polygon points="18,18 11,25 17,19" fill="#c7d0d9"/><circle cx="18" cy="18" r="1.5" fill="#5b6670"/></svg>
+                        </div>
                         <h3>Your browser</h3>
                         <p>
                             Reading or writing and need to look something up? One
@@ -1887,6 +1876,9 @@
                     </div>
                     <div class="card">
                         <span class="tag">Note taker</span>
+                        <div class="usehud">
+                            <svg viewBox="0 0 36 36"><defs><clipPath id="u-notes-clip"><rect x="5" y="3" width="26" height="30" rx="6"/></clipPath></defs><g clip-path="url(#u-notes-clip)"><rect x="5" y="3" width="26" height="30" fill="#fff"/><rect x="5" y="3" width="26" height="8" fill="#ffd23f"/></g><rect x="5" y="3" width="26" height="30" rx="6" fill="none" stroke="rgba(0,0,0,.12)"/><g stroke="#d4d4da" stroke-width="1.8" stroke-linecap="round"><line x1="10" y1="17" x2="26" y2="17"/><line x1="10" y1="22" x2="26" y2="22"/><line x1="10" y1="27" x2="21" y2="27"/></g></svg>
+                        </div>
                         <h3>Your notes</h3>
                         <p>
                             A thought worth capturing never means hunting for the
@@ -1896,7 +1888,10 @@
                     </div>
                     <div class="card">
                         <span class="tag">Manager</span>
-                        <h3>Mail &amp; chat</h3>
+                        <div class="usehud">
+                            <svg viewBox="0 0 36 36"><defs><linearGradient id="u-mail-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#42b1ff"/><stop offset="1" stop-color="#1a72e8"/></linearGradient></defs><rect x="3" y="3" width="30" height="30" rx="8" fill="url(#u-mail-grad)"/><rect x="8" y="12" width="20" height="13" rx="2.5" fill="#fff"/><path d="M9 13.5L18 20l9-6.5" fill="none" stroke="#1a72e8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <h3>Your email</h3>
                         <p>
                             Glance at a message and reply, then drop straight back
                             into focus — without getting sucked in and losing the
@@ -2019,87 +2014,6 @@
             </div>
         </section>
 
-        <section class="band" id="faq">
-            <div class="sec">
-                <h2>FAQ</h2>
-                <details class="faq-item">
-                    <summary>Will it break my existing ⌘ shortcuts?</summary>
-                    <p class="faq-a">
-                        No. A built-in hold delay lets quick taps and your normal
-                        right-⌘ shortcuts pass straight through — Key54 only fires
-                        on a deliberate hold. (The Instant preset is the one
-                        exception, if you choose to dedicate the key.)
-                    </p>
-                </details>
-                <details class="faq-item">
-                    <summary>Does it work with any app?</summary>
-                    <p class="faq-a">
-                        Yes — bind any application you like: terminal, browser,
-                        notes, mail, chat, anything. It brings the real, full app
-                        forward, including full-screen apps and apps with no open
-                        windows.
-                    </p>
-                </details>
-                <details class="faq-item">
-                    <summary>Why the right Command key?</summary>
-                    <p class="faq-a">
-                        It's rarely used — most people reach for the left ⌘ — so
-                        it's a mostly-idle key that's perfect to repurpose. 54 is
-                        also its macOS keycode, which is where the name comes
-                        from.
-                    </p>
-                </details>
-                <details class="faq-item">
-                    <summary>Is it really free?</summary>
-                    <p class="faq-a">
-                        Yes — Key54 is free and open source under the MIT license.
-                        If it earns a spot on your Mac, a tip or a GitHub star is
-                        a lovely way to say thanks.
-                    </p>
-                </details>
-                <details class="faq-item">
-                    <summary>Does it slow down my Mac?</summary>
-                    <p class="faq-a">
-                        No. It's about 1 MB, uses almost zero resources, and runs
-                        silently as a background agent — no Dock icon, no menu bar
-                        clutter. It starts at login and stays out of the way.
-                    </p>
-                </details>
-                <details class="faq-item">
-                    <summary>What do I need to run it?</summary>
-                    <p class="faq-a">
-                        macOS 13 or later on Apple Silicon (Intel Macs can build
-                        from source). On first launch you grant Accessibility
-                        permission so it can detect the right Command key.
-                    </p>
-                </details>
-            </div>
-        </section>
-
-        <section class="sec support" id="contribute">
-            <h2>Free — chip in if you like it</h2>
-            <p class="free">
-                Key54 is free and open source — no upsell, no account. If it's
-                earned a spot on your Mac, here are a few ways to help it keep
-                going. A star helps more people find it; tips go toward
-                development costs.
-            </p>
-            <div class="cta-row">
-                <a class="btn star" href="https://github.com/grokcodile/key54">
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.26 6.85.82-5.06 4.66 1.36 6.74L12 17.77 5.99 21.24l1.36-6.74-5.06-4.66 6.85-.82z"/></svg>
-                    Star on GitHub
-                </a>
-                <a class="btn" href="https://ko-fi.com/grokcodile">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h12v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><line x1="8" y1="3.5" x2="8" y2="5.5"/><line x1="12" y1="3.5" x2="12" y2="5.5"/></svg>
-                    Buy me a coffee
-                </a>
-                <a class="btn" href="https://github.com/sponsors/grokcodile">
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.2-8.06C1.1 10.1 2.2 6.5 5.4 6.5c2 0 3.3 1.2 6.6 4.3 3.3-3.1 4.6-4.3 6.6-4.3 3.2 0 4.3 3.6 2.6 6.44C18.7 16.65 12 21 12 21z"/></svg>
-                    Sponsor
-                </a>
-            </div>
-        </section>
-
         <section class="band" id="feedback">
             <div class="sec">
                 <h2>Found a bug or have an idea?</h2>
@@ -2143,6 +2057,30 @@
             </div>
         </section>
 
+        <section class="sec support" id="contribute">
+            <h2>Free — chip in if you like it</h2>
+            <p class="free">
+                Key54 is free and open source — no upsell, no account. If it's
+                earned a spot on your Mac, here are a few ways to help it keep
+                going. A star helps more people find it; tips go toward
+                development costs.
+            </p>
+            <div class="cta-row">
+                <a class="btn star" href="https://github.com/grokcodile/key54">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.26 6.85.82-5.06 4.66 1.36 6.74L12 17.77 5.99 21.24l1.36-6.74-5.06-4.66 6.85-.82z"/></svg>
+                    Star on GitHub
+                </a>
+                <a class="btn" href="https://ko-fi.com/grokcodile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h12v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><line x1="8" y1="3.5" x2="8" y2="5.5"/><line x1="12" y1="3.5" x2="12" y2="5.5"/></svg>
+                    Buy me a coffee
+                </a>
+                <a class="btn" href="https://github.com/sponsors/grokcodile">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.2-8.06C1.1 10.1 2.2 6.5 5.4 6.5c2 0 3.3 1.2 6.6 4.3 3.3-3.1 4.6-4.3 6.6-4.3 3.2 0 4.3 3.6 2.6 6.44C18.7 16.65 12 21 12 21z"/></svg>
+                    Sponsor
+                </a>
+            </div>
+        </section>
+
         <footer>
             <div class="foot-inner">
                 <div class="foot-brand">
@@ -2162,7 +2100,6 @@
                     <a href="#comparison">Comparison</a>
                     <a href="#accessibility">Accessibility</a>
                     <a href="#setup">Setup</a>
-                    <a href="#faq">FAQ</a>
                     <a href="#feedback">Feedback</a>
                 </div>
                 <div class="foot-col">
