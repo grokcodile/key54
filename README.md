@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="screenshots/icon_readme.png" alt="Key54 app icon" width="128" height="128">
+</p>
+
 # Key54
 
 [![Latest release](https://img.shields.io/github/v/release/grokcodile/key54?label=download&sort=semver)](https://github.com/grokcodile/key54/releases/latest)
@@ -8,9 +12,9 @@
 
 It runs as a background agent — no Dock icon, no menu bar item — and starts at login.
 
-> **Overview, usage examples, FAQ, and support:** <https://grokcodile.github.io/key54>
-
-![Key54 settings window](screenshots/settings.png?v=1.12)
+<p align="center">
+  <a href="https://grokcodile.github.io/key54"><img src="https://img.shields.io/badge/Website%20%26%20support%20%E2%86%92-grokcodile.github.io%2Fkey54-0071e3?style=for-the-badge" alt="Website & support"></a>
+</p>
 
 ## Features
 
