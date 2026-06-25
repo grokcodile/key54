@@ -25,17 +25,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // `--screenshot <path>`: render the settings window over a fixed
-        // neutral backdrop, capture it, write the PNG, and quit. Used by
-        // install.sh to keep the README screenshot current. Skips all the
-        // normal agent setup (no event tap, no login item).
-        if let i = CommandLine.arguments.firstIndex(of: "--screenshot") {
-            let path = i + 1 < CommandLine.arguments.count
-                ? CommandLine.arguments[i + 1] : "screenshots/settings.png"
-            captureSettingsScreenshot(to: path)
-            return
-        }
-
         NSApp.setActivationPolicy(.accessory)
 
         // Show tooltips (the bare Tip Jar emoji's hint) after a brief delay,
@@ -66,62 +55,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.updateAppDisplay()
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
-    }
-
-    // MARK: - Screenshot capture (--screenshot)
-
-    /// Show the settings window, capture just the window — transparent outside
-    /// its rounded corners, no drop shadow, no background — write a PNG to
-    /// `path`, and quit. Driven by the standalone screenshot.sh.
-    private func captureSettingsScreenshot(to path: String) {
-        NSApp.setActivationPolicy(.regular)
-        SettingsWindow.screenshotMode = true
-
-        let win = SettingsWindow(delegate: self)
-        settingsWindow = win
-        win.updateAppDisplay()
-        win.hasShadow = false
-        NSApp.activate(ignoringOtherApps: true)
-        win.center()
-        win.makeKeyAndOrderFront(nil)
-
-        // Let the window server composite before capturing.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            self?.writeSettingsCapture(of: win, to: path)
-            NSApp.terminate(nil)
-        }
-    }
-
-    private func writeSettingsCapture(of win: NSWindow, to path: String) {
-        // .boundsIgnoreFraming → just the window rect, no shadow; the rounded
-        // corners and anything outside the window stay transparent.
-        guard let shot = CGWindowListCreateImage(
-            .null, .optionIncludingWindow, CGWindowID(win.windowNumber), .boundsIgnoreFraming) else {
-            fputs("screenshot: capture failed — grant Screen Recording permission " +
-                  "to Key54 in System Settings → Privacy & Security.\n", stderr)
-            return
-        }
-        // The capture is in Retina pixels; downsample to the window's logical
-        // (1x) size so the PNG matches the on-screen dimensions.
-        let scale = win.backingScaleFactor
-        let w = Int((CGFloat(shot.width) / scale).rounded())
-        let h = Int((CGFloat(shot.height) / scale).rounded())
-        var image = shot
-        if scale != 1, w > 0, h > 0,
-           let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
-                               bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
-            ctx.interpolationQuality = .high
-            ctx.draw(shot, in: CGRect(x: 0, y: 0, width: w, height: h))
-            image = ctx.makeImage() ?? shot
-        }
-        guard let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return }
-        do {
-            try data.write(to: URL(fileURLWithPath: path))
-            print("wrote \(path) (\(image.width)×\(image.height))")
-        } catch {
-            fputs("screenshot: could not write \(path): \(error)\n", stderr)
-        }
     }
 
     // MARK: - App tracking
@@ -576,9 +509,6 @@ class SettingsWindow: NSWindow {
     // full trigger time is buffer + charge. "Instant" skips the animation
     // entirely and switches the moment the key is held. "Custom" (the fifth
     // stop) reads its two values from defaults instead of these tables.
-    /// Set during `--screenshot` capture so the window renders in its normal
-    /// state (the AX-permission banner is suppressed).
-    static var screenshotMode = false
     static let holdDurationLabels = ["Instant", "Short", "Medium", "Long", "Custom"]
     static let keyDelayValues:   [TimeInterval] = [0.0, 0.5, 0.5, 0.7]   // pre-buffer dead-zone
     static let animationLengthValues: [TimeInterval] = [0.0, 0.0, 0.4, 0.6]   // charge sweep
@@ -618,7 +548,7 @@ class SettingsWindow: NSWindow {
     // MARK: - Layout
 
     private func rebuild() {
-        let needsBanner = !AXIsProcessTrusted() && !Self.screenshotMode
+        let needsBanner = !AXIsProcessTrusted()
         let showsCustom = appDelegate?.selectedPreset == 4
         let innerW = contentW - pad * 2
 
@@ -1116,7 +1046,19 @@ final class TriggerHUD {
     private let ringRadius: CGFloat = 52
     private let puckSize: CGFloat = 148
 
-    private lazy var panel: NSPanel = makePanel()
+    // Rebuilt on demand. The window-server backing of one long-lived panel can
+    // go stale across sleep/wake, screen lock, or a display change — the HUD then
+    // silently fails to appear until relaunch. invalidatePanel() (wired to those
+    // events in init) drops it so the next summon gets a fresh, valid window. The
+    // persistent CALayers below are re-parented into the new view tree by
+    // makePanel(), so only the window + container views are actually remade.
+    private var _panel: NSPanel?
+    private var panel: NSPanel {
+        if let p = _panel { return p }
+        let p = makePanel()
+        _panel = p
+        return p
+    }
     private let track = CAShapeLayer()
     private let ring = CAShapeLayer()
     private let iconLayer = CALayer()
@@ -1133,6 +1075,51 @@ final class TriggerHUD {
     private var activeStyle: AnimationStyle = .powerUp
     private var fadeGeneration = 0    // invalidates stale fade-out completions
     private var animationLength: TimeInterval = 0.001   // current preset's fill time
+
+    // Observers (wake / display change / unlock) that drop the panel so it is
+    // rebuilt fresh on the next summon — see invalidatePanel().
+    private var rebuildObservers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
+
+    // MARK: Lifecycle
+
+    init() {
+        // Each of these events can leave the single long-lived panel with a stale
+        // window-server backing, after which orderFrontRegardless() shows nothing
+        // (the HUD vanishes "after a while", cured only by relaunch). Dropping the
+        // panel on each forces a clean rebuild on the next summon.
+        let centers: [NotificationCenter] = [
+            NSWorkspace.shared.notificationCenter,      // wake from sleep
+            NotificationCenter.default,                 // display / resolution change
+            DistributedNotificationCenter.default(),    // return from lock screen
+        ]
+        let names: [NSNotification.Name] = [
+            NSWorkspace.didWakeNotification,
+            NSApplication.didChangeScreenParametersNotification,
+            NSNotification.Name("com.apple.screenIsUnlocked"),
+        ]
+        for (center, name) in zip(centers, names) {
+            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.invalidatePanel()
+            }
+            rebuildObservers.append((center, token))
+        }
+    }
+
+    deinit {
+        for (center, token) in rebuildObservers { center.removeObserver(token) }
+    }
+
+    /// Drop the current panel so the next summon builds a fresh one with a clean
+    /// window-server backing. The persistent CALayers are re-parented into the new
+    /// view tree by makePanel(); only the window + container views are remade.
+    private func invalidatePanel() {
+        // close() (not just orderOut) removes the panel from the app's window list,
+        // so dropping our reference lets ARC free it — no accumulation across
+        // repeated sleep/lock cycles. isReleasedWhenClosed is false, so this is the
+        // safe ARC disposal pattern: close to dismiss, nil to deallocate.
+        _panel?.close()
+        _panel = nil
+    }
 
     // MARK: Public
 
@@ -1392,7 +1379,10 @@ final class TriggerHUD {
         p.isOpaque = false
         p.backgroundColor = .clear
         p.hasShadow = false
-        p.level = .screenSaver
+        // CGShieldingWindowLevel() sits above the full-screen / shield layer, so the
+        // HUD overlays apps that are in full screen. Plain .screenSaver (level 1000)
+        // stopped winning against full-screen windows on macOS 26+/27.
+        p.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         p.ignoresMouseEvents = true
         // canJoinAllSpaces + stationary: present on every Space and pinned in
         // place, so it doesn't slide with the Space-switch transition.

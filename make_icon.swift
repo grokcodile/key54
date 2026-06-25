@@ -14,7 +14,6 @@ import AppKit
 
 let argv = CommandLine.arguments
 let iconsetDir = argv.count > 1 ? argv[1] : "AppIcon.iconset"
-let readmeIcon = "screenshots/icon_readme.png"
 
 // ── Keycap geometry / styling (tweak the look here) ──────────────────────────
 let artSize: CGFloat = 1024
@@ -158,7 +157,4 @@ let sizes: [(Int, String)] = [
 ]
 for (px, name) in sizes { write(master, px, to: "\(iconsetDir)/\(name)") }
 
-// README header icon (displayed at 128; emit 512 for retina).
-write(master, 512, to: readmeIcon)
-
-print("wrote \(iconsetDir) (\(sizes.count) sizes) + \(readmeIcon)")
+print("wrote \(iconsetDir) (\(sizes.count) sizes)")
