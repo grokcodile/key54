@@ -1,5 +1,6 @@
 import Cocoa
 import ServiceManagement
+import Carbon
 
 // MARK: - App Delegate
 
@@ -24,16 +25,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "showAnimation") }
     }
 
+    /// Master on/off. When enabled, Key54 listens for the right-⌘ trigger and
+    /// starts at login. When disabled, it stops listening and unregisters the
+    /// login item, so it does nothing and won't return at the next login until
+    /// the user turns it back on. Defaults to enabled.
+    var appEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "appEnabled") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "appEnabled") }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
         // Show tooltips (the bare Tip Jar emoji's hint) after a brief delay,
         // rather than the long system default.
         UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 150])
-
-        if SMAppService.mainApp.status != .enabled {
-            try? SMAppService.mainApp.register()
-        }
 
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
@@ -42,7 +48,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // Register the login item only when enabled.
+        if appEnabled, SMAppService.mainApp.status != .enabled {
+            try? SMAppService.mainApp.register()
+        }
+        // Always install the event tap — and, when permission is missing, the
+        // observer inside it that refreshes the window once permission is granted.
+        // The trigger itself is gated by appEnabled in scheduleToggle(), so this is
+        // safe even while disabled.
         startEventTap()
+
+        // A user-initiated launch (Finder / Spotlight / Launchpad / Dock / `open`)
+        // opens straight to settings. A login auto-launch by launchd stays silent
+        // in the background. `applicationShouldHandleReopen` covers the case where
+        // the app is already running and the user opens it again.
+        if !launchedAsLoginItem {
+            showSettings()
+        }
+    }
+
+    /// Flip the master switch: (un)register the login item and (dis)enable the
+    /// event tap. Called from the Enable/Disable control in Settings.
+    func setAppEnabled(_ on: Bool) {
+        appEnabled = on
+        if on {
+            if SMAppService.mainApp.status != .enabled {
+                try? SMAppService.mainApp.register()
+            }
+            startEventTap()
+        } else {
+            try? SMAppService.mainApp.unregister()
+            // The tap stays installed but scheduleToggle() ignores it while
+            // disabled — more reliable than toggling the tap, which the system's
+            // tapDisabled callback would auto-re-enable behind our back.
+        }
+    }
+
+    /// Whether launchd auto-started us at login (vs. the user opening the app).
+    /// The launch Apple Event carries `keyAELaunchedAsLogInItem` only on a login
+    /// launch; a user open sends `kAEOpenApplication` without it. MUST be read in
+    /// `applicationDidFinishLaunching` — `currentAppleEvent` is nil any earlier.
+    private var launchedAsLoginItem: Bool {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        return event?.eventID == AEEventID(kAEOpenApplication)
+            && event?.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?
+                .enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -222,6 +272,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startEventTap() {
+        // Idempotent: if the tap already exists (e.g. re-enabling via the master
+        // switch), just turn it back on instead of creating a second one.
+        if let tap { CGEvent.tapEnable(tap: tap, enable: true); return }
+
         // NOTE: must be an active (.defaultTap) tap — a .listenOnly tap here
         // stops delivering after the first toggle in practice. We pass every
         // event through unchanged and only observe the right Command key.
@@ -275,6 +329,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func scheduleToggle() {
+        guard appEnabled else { return }   // master switch off: ignore the trigger
         guard bufferTimer == nil, holdTimer == nil, !firing else { return }
         // Per-preset dead-zone buffer. Only if right-⌘ is still held past it do
         // we engage and start the charge countdown, so a quick tap or chord
@@ -501,8 +556,8 @@ class SettingsWindow: NSWindow {
     private var stylePills: [StylePill] = []   // the two Animation Style buttons
     private let contentW: CGFloat = 460
     private let pad: CGFloat = 32
-    private let bannerH: CGFloat = 84
-    private let bannerGap: CGFloat = 16
+
+    private var savedToast: NSPanel?   // transient "Settings saved" HUD shown on Done
 
     // Hold-duration presets. Each stop has its own dead-zone buffer and charge
     // sweep (how long the ring fills); the dissolve and swell are constant. The
@@ -545,43 +600,223 @@ class SettingsWindow: NSWindow {
         DistributedNotificationCenter.default().removeObserver(self)
     }
 
+    // MARK: - "Settings saved" toast
+
+    /// A small, self-dismissing HUD shown when the user clicks Done: confirms the
+    /// save and reminds how to get back. Floats centered where the window was,
+    /// fades in, holds briefly, then fades out and disposes itself.
+    private func showSavedToast() {
+        let padH: CGFloat = 30, padTop: CGFloat = 24, padBottom: CGFloat = 22
+        let iconSize: CGFloat = 42
+        let iconGap: CGFloat = 12
+        let titleH: CGFloat = 26
+        let titleBodyGap: CGFloat = 6
+
+        let bodyPara = NSMutableParagraphStyle()
+        bodyPara.alignment = .center
+        let bodyStr = NSAttributedString(
+            string: "Open Key54 from the Finder to change these settings again.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: bodyPara,
+            ])
+        // Size the toast to fit the body on a single line.
+        let bodyMeasure = bodyStr.boundingRect(
+            with: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading])
+        let bodyW = ceil(bodyMeasure.width)
+        let bodyH = ceil(bodyMeasure.height)
+        let w = bodyW + padH * 2
+        let h = padTop + iconSize + iconGap + titleH + titleBodyGap + bodyH + padBottom
+
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h),
+                            styleMask: [.borderless, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isReleasedWhenClosed = false
+        panel.ignoresMouseEvents = true
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        let effect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: w, height: h))
+        effect.material = .hudWindow
+        effect.blendingMode = .behindWindow
+        effect.state = .active
+        effect.maskImage = Self.roundedMaskImage(radius: 18)
+        panel.contentView = effect
+
+        if let img = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) {
+            let iv = NSImageView(image: img)
+            iv.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: iconSize, weight: .regular)
+            iv.contentTintColor = .controlAccentColor
+            iv.imageScaling = .scaleProportionallyUpOrDown
+            iv.frame = NSRect(x: (w - iconSize) / 2, y: h - padTop - iconSize, width: iconSize, height: iconSize)
+            effect.addSubview(iv)
+        }
+
+        let title = NSTextField(labelWithString: "Settings saved!")
+        title.font = .systemFont(ofSize: 18, weight: .semibold)
+        title.alignment = .center
+        title.frame = NSRect(x: padH, y: h - padTop - iconSize - iconGap - titleH, width: w - padH * 2, height: titleH)
+        effect.addSubview(title)
+
+        let body = NSTextField(labelWithAttributedString: bodyStr)
+        body.alignment = .center
+        body.maximumNumberOfLines = 0
+        body.frame = NSRect(x: padH, y: padBottom, width: bodyW, height: bodyH)
+        effect.addSubview(body)
+
+        // Centered where the settings window is (captured before it orders out).
+        panel.setFrameOrigin(NSPoint(x: frame.midX - w / 2, y: frame.midY - h / 2))
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        savedToast = panel
+
+        // Liquid-glass "giggle": spring up to full size with a little overshoot
+        // (scaled about the toast's center), while fading in.
+        if let layer = effect.layer {
+            layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+            layer.position = CGPoint(x: w / 2, y: h / 2)
+            let spring = CASpringAnimation(keyPath: "transform.scale")
+            spring.fromValue = 0.82
+            spring.toValue = 1.0
+            spring.mass = 1
+            spring.stiffness = 260
+            spring.damping = 11
+            spring.initialVelocity = 6
+            spring.duration = spring.settlingDuration
+            layer.add(spring, forKey: "giggle")
+        }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.16
+            panel.animator().alphaValue = 1
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 1.4
+                panel.animator().alphaValue = 0
+            }, completionHandler: {
+                panel.orderOut(nil)
+                self?.savedToast = nil
+            })
+        }
+    }
+
+    /// Stretchable rounded-rect mask so NSVisualEffectView's blur is clipped to
+    /// the shape (a layer cornerRadius alone won't clip the material).
+    private static func roundedMaskImage(radius r: CGFloat) -> NSImage {
+        let edge = r * 2 + 1
+        let img = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
+            return true
+        }
+        img.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
+        img.resizingMode = .stretch
+        return img
+    }
+
     // MARK: - Layout
 
     private func rebuild() {
-        let needsBanner = !AXIsProcessTrusted()
-        let showsCustom = appDelegate?.selectedPreset == 4
+        let hasPermission = AXIsProcessTrusted()
+        let enabled = appDelegate?.appEnabled ?? true
+        let switchOn = hasPermission && enabled          // the app is actually on
+        let showSwitch = hasPermission                   // switch + description hidden until permission is granted
+        let showWarning = !hasPermission                 // permission notice replaces switch + controls
+        let showControls = switchOn                      // app picker / timing / animation
+        let showsCustom = showControls && appDelegate?.selectedPreset == 4
         let innerW = contentW - pad * 2
 
-        // Intro text — built first so the layout can size to the measured text.
+        // Description under the switch (shown only once permission is granted):
+        // the normal usage hint, or the "turned off" message.
         let descW: CGFloat = 350
         let descPara = NSMutableParagraphStyle()
         descPara.alignment = .center
         descPara.paragraphSpacing = 10
         descPara.lineBreakMode = .byWordWrapping
-        let descStr = NSAttributedString(
-            string: "Hold the Command (⌘) key on the right side of your keyboard to summon the application below—hold it again to return to whatever you were doing.",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: descPara,
-            ])
+        let descStr: NSAttributedString
+        if enabled {
+            descStr = NSAttributedString(
+                string: "Hold the Command (⌘) key on the right side of your keyboard to summon the application below—hold it again to return to whatever you were doing.",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                    .paragraphStyle: descPara,
+                ])
+        } else {
+            // Off state: the explanation, then a big "unplugged" glyph.
+            let s = NSMutableAttributedString(
+                string: "Key54 is unplugged and will not restart at login.\n",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                    .paragraphStyle: descPara,
+                ])
+            s.append(NSAttributedString(
+                string: "🔌",
+                attributes: [.font: NSFont.systemFont(ofSize: 46), .paragraphStyle: descPara]))
+            descStr = s
+        }
         let descH = ceil(descStr.boundingRect(
             with: NSSize(width: descW, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]).height) + 2
+
+        // Permission warning contents (only when permission is missing): a heading,
+        // the explanatory line, and the button — all inside one box.
+        let warnInnerW = innerW - 32
+        let warnPara = NSMutableParagraphStyle()
+        warnPara.alignment = .center
+        let warnStr = NSAttributedString(
+            string: "Key54 needs to watch the Command (⌘) key on the right side of your keyboard to control how it opens apps.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: warnPara,
+            ])
+        let warnBodyH = ceil(warnStr.boundingRect(
+            with: NSSize(width: warnInnerW, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]).height)
+        // Simple step-by-step for granting the permission (left-aligned list).
+        let stepsPara = NSMutableParagraphStyle()
+        stepsPara.alignment = .center
+        stepsPara.lineSpacing = 3
+        stepsPara.paragraphSpacing = 12
+        // One centered step per line ("N ❯ text"); paragraphSpacing gives the gap.
+        let warnStepsStr = NSAttributedString(
+            string: "1 ❯ Click the button below to open System Settings.\n2 ❯ Find Key54 in the list and turn it on.\n3 ❯ Return to this window.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: stepsPara,
+            ])
+        let warnStepsW = warnInnerW
+        let warnStepsH = ceil(warnStepsStr.boundingRect(
+            with: NSSize(width: warnStepsW, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]).height)
+        let warnPadV: CGFloat = 16, warnHeadingH: CGFloat = 20, warnHeadGap: CGFloat = 8
+        let warnBodyStepsGap: CGFloat = 12, warnStepsBtnGap: CGFloat = 14, warnBtnH: CGFloat = 26
+        let warningBoxH = warnPadV + warnHeadingH + warnHeadGap + warnBodyH
+                        + warnBodyStepsGap + warnStepsH + warnStepsBtnGap + warnBtnH + warnPadV
 
         // Fixed vertical metrics (top → bottom). The content view runs under
         // the transparent titlebar, so the top margin includes its height.
         let topMargin: CGFloat = 56
         let titleH: CGFloat = 36
+        let titleSwitchGap: CGFloat = 10
+        let switchRowH: CGFloat = 28
         let chooseH: CGFloat = 32
         let sliderBlockH: CGFloat = 68  // caption + slider + tick labels
         // The style selector only matters when there's a charge to visualize, so
         // it's hidden for Instant/Short (preset < 2 — no charge animation).
-        let showsAnimationStyle = (appDelegate?.selectedPreset ?? 2) >= 2
+        let showsAnimationStyle = showControls && (appDelegate?.selectedPreset ?? 2) >= 2
         let animationStyleBlockH: CGFloat = 68   // caption + a row of two selectable pills
         let customBlockH: CGFloat = showsCustom ? 132 : 0   // Custom timing sub-panel
-        let bottomBarH: CGFloat = 64    // Quit / Done row + bottom margin
-        let unitGap: CGFloat = 10       // within a unit (title ↔ description)
+        let bottomBarH: CGFloat = 64    // button row + bottom margin
+        let unitGap: CGFloat = 26       // gap between the switch and the description
         let sectionGap: CGFloat = 28    // between sections — the layout's rhythm
 
         // App-selection box (icon + name + change button) metrics
@@ -592,10 +827,15 @@ class SettingsWindow: NSWindow {
         let nameButtonGap: CGFloat = 14
         let appBoxH = boxPadV + iconH + iconNameGap + nameH + nameButtonGap + chooseH + boxPadV
 
-        let bannerBlock = needsBanner ? (bannerGap + bannerH) : 0
-        let totalH = topMargin + titleH + unitGap + descH + sectionGap + appBoxH
-                   + sectionGap + sliderBlockH + customBlockH + bannerBlock
-                   + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
+        // Switch + its description appear together (only with permission); the
+        // warning replaces them when permission is missing.
+        let switchBlock = showSwitch ? (titleSwitchGap + switchRowH + unitGap + descH) : 0
+        let warningBlock = showWarning ? (sectionGap + warningBoxH) : 0
+        // The functional controls (app picker, timing, animation) only show when on.
+        let enabledBody = sectionGap + appBoxH + sectionGap + sliderBlockH + customBlockH
+                        + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
+        let totalH = topMargin + titleH + switchBlock + warningBlock
+                   + (showControls ? enabledBody : 0)
                    + sectionGap + bottomBarH
 
         setContentSize(NSSize(width: contentW, height: totalH))
@@ -608,33 +848,6 @@ class SettingsWindow: NSWindow {
         c.state = .followsWindowActiveState
         var y = totalH - topMargin
 
-        // Accessibility banner (above title)
-        if needsBanner {
-            y -= bannerH
-            let box = NSBox(frame: NSRect(x: pad, y: y, width: innerW, height: bannerH))
-            box.boxType = .custom
-            box.fillColor = NSColor.systemOrange.withAlphaComponent(0.12)
-            box.borderColor = NSColor.systemOrange.withAlphaComponent(0.45)
-            box.borderWidth = 1; box.cornerRadius = 10; box.titlePosition = .noTitle
-            c.addSubview(box)
-
-            let msg = NSTextField(labelWithString: "Accessibility Permission Required")
-            msg.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-            msg.textColor = .systemOrange
-            msg.frame = NSRect(x: 10, y: bannerH - 32, width: innerW - 20, height: 20)
-            msg.alignment = .center
-            box.addSubview(msg)
-
-            let btn = NSButton(title: "Open Privacy & Security Settings", target: self,
-                               action: #selector(openAxSettings))
-            btn.bezelStyle = .rounded
-            btn.frame = NSRect(x: (innerW - 260) / 2, y: 12, width: 260, height: 26)
-            box.addSubview(btn)
-
-            y -= bannerGap
-
-        }
-
         // Title
         y -= titleH
         let titleLabel = NSTextField(labelWithString: "Key54")
@@ -643,16 +856,81 @@ class SettingsWindow: NSWindow {
         titleLabel.alignment = .center
         c.addSubview(titleLabel)
 
-        // Description
-        y -= unitGap + descH
-        let desc = NSTextField(labelWithAttributedString: descStr)
-        desc.frame = NSRect(x: (contentW - descW) / 2, y: y, width: descW, height: descH)
-        desc.alignment = .center
-        desc.usesSingleLineMode = false
-        desc.cell?.wraps = true
-        desc.maximumNumberOfLines = 0
-        c.addSubview(desc)
+        // Enable / Disable master switch + its description — shown only once
+        // permission is granted. Without permission these are replaced by the
+        // warning below.
+        if showSwitch {
+            y -= titleSwitchGap + switchRowH
+            let sw = NSSwitch()
+            sw.state = switchOn ? .on : .off
+            sw.target = self
+            sw.action = #selector(toggleEnabled(_:))
+            sw.frame = NSRect(origin: .zero, size: sw.intrinsicContentSize)
+            let swW = ceil(sw.frame.width), swH = ceil(sw.frame.height)
+            let capLabel = NSTextField(labelWithString: switchOn ? "Enabled" : "Disabled")
+            capLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+            capLabel.textColor = switchOn ? .labelColor : .secondaryLabelColor
+            capLabel.sizeToFit()
+            let capW = ceil(capLabel.frame.width), capH = ceil(capLabel.frame.height)
+            let swGap: CGFloat = 8
+            let groupX = (contentW - (capW + swGap + swW)) / 2
+            capLabel.frame = NSRect(x: groupX, y: y + (switchRowH - capH) / 2, width: capW, height: capH)
+            c.addSubview(capLabel)
+            sw.frame = NSRect(x: groupX + capW + swGap, y: y + (switchRowH - swH) / 2, width: swW, height: swH)
+            c.addSubview(sw)
 
+            y -= unitGap + descH
+            let desc = NSTextField(labelWithAttributedString: descStr)
+            desc.frame = NSRect(x: (contentW - descW) / 2, y: y, width: descW, height: descH)
+            desc.alignment = .center
+            desc.usesSingleLineMode = false
+            desc.cell?.wraps = true
+            desc.maximumNumberOfLines = 0
+            c.addSubview(desc)
+        }
+
+        // Accessibility permission warning — replaces the switch + controls until
+        // permission is granted. One box holding the heading, explanation, button.
+        if showWarning {
+            y -= sectionGap + warningBoxH
+            let box = NSBox(frame: NSRect(x: pad, y: y, width: innerW, height: warningBoxH))
+            box.boxType = .custom
+            box.fillColor = NSColor.systemOrange.withAlphaComponent(0.12)
+            box.borderColor = NSColor.systemOrange.withAlphaComponent(0.45)
+            box.borderWidth = 1; box.cornerRadius = 10; box.titlePosition = .noTitle
+            box.contentViewMargins = .zero
+            c.addSubview(box)
+
+            let msg = NSTextField(labelWithString: "Accessibility Permission Required")
+            msg.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            msg.textColor = .systemOrange
+            msg.alignment = .center
+            msg.frame = NSRect(x: 16, y: warningBoxH - warnPadV - warnHeadingH, width: warnInnerW, height: warnHeadingH)
+            box.addSubview(msg)
+
+            let warnBody = NSTextField(labelWithAttributedString: warnStr)
+            warnBody.alignment = .center
+            warnBody.maximumNumberOfLines = 0
+            warnBody.frame = NSRect(x: 16, y: warningBoxH - warnPadV - warnHeadingH - warnHeadGap - warnBodyH,
+                                    width: warnInnerW, height: warnBodyH)
+            box.addSubview(warnBody)
+
+            let steps = NSTextField(labelWithAttributedString: warnStepsStr)
+            steps.maximumNumberOfLines = 0
+            steps.frame = NSRect(x: (innerW - warnStepsW) / 2,
+                                 y: warningBoxH - warnPadV - warnHeadingH - warnHeadGap - warnBodyH
+                                    - warnBodyStepsGap - warnStepsH,
+                                 width: warnStepsW, height: warnStepsH)
+            box.addSubview(steps)
+
+            let btn = NSButton(title: "Open Privacy & Security Settings", target: self,
+                               action: #selector(openAxSettings))
+            btn.bezelStyle = .rounded
+            btn.frame = NSRect(x: (innerW - 260) / 2, y: warnPadV, width: 260, height: warnBtnH)
+            box.addSubview(btn)
+        }
+
+        if showControls {
         // App-selection section — icon + name + change button inside a gray box
         y -= sectionGap + appBoxH
         let boxW: CGFloat = 320
@@ -782,20 +1060,22 @@ class SettingsWindow: NSWindow {
                 px += pill.frame.width + gapX
             }
         }
+        }   // if enabled
 
-        // Bottom bar: Quit (secondary, left) + Done (primary, right).
+        // Centered bottom button: "Save" when the app is on (there are settings
+        // to keep), otherwise "Quit" — when off or unpermitted there's nothing to
+        // save and quitting is what the user wants.
         let btnW: CGFloat = 100
-        let barY: CGFloat = 20
-        let quitBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
-        quitBtn.frame = NSRect(x: pad, y: barY, width: btnW, height: 32)
-        quitBtn.bezelStyle = .rounded
-        c.addSubview(quitBtn)
-
-        let doneBtn = NSButton(title: "Done", target: self, action: #selector(saveAndClose))
-        doneBtn.frame = NSRect(x: contentW - pad - btnW, y: barY, width: btnW, height: 32)
-        doneBtn.bezelStyle = .rounded
-        doneBtn.keyEquivalent = "\r"
-        c.addSubview(doneBtn)
+        let bottomBtn: NSButton
+        if switchOn {
+            bottomBtn = NSButton(title: "Save", target: self, action: #selector(saveAndClose))
+            bottomBtn.keyEquivalent = "\r"
+        } else {
+            bottomBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
+        }
+        bottomBtn.frame = NSRect(x: (contentW - btnW) / 2, y: 20, width: btnW, height: 32)
+        bottomBtn.bezelStyle = .rounded
+        c.addSubview(bottomBtn)
 
         // Tip Jar easter egg: a lone jar emoji tucked into the top-right of the
         // titlebar, mirroring the traffic lights on the left. Tooltip + hand
@@ -837,6 +1117,7 @@ class SettingsWindow: NSWindow {
 
     @objc private func saveAndClose() {
         appDelegate?.settingsClosed()
+        showSavedToast()        // build the toast at the window's center before it orders out
         orderOut(nil)
     }
 
@@ -844,6 +1125,14 @@ class SettingsWindow: NSWindow {
     override func close() {
         appDelegate?.settingsClosed()
         super.close()
+    }
+
+    /// Master Enable/Disable switch: flip the app on/off and rebuild the window
+    /// to swap between the full settings and the "disabled" message.
+    @objc private func toggleEnabled(_ sender: NSSwitch) {
+        appDelegate?.setAppEnabled(sender.state == .on)
+        rebuild()
+        center()
     }
 
     @objc private func sliderChanged(_ sender: NSSlider) {
