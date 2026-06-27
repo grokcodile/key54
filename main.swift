@@ -557,8 +557,6 @@ class SettingsWindow: NSWindow {
     private let contentW: CGFloat = 460
     private let pad: CGFloat = 32
 
-    private var savedToast: NSPanel?   // transient "Settings saved" HUD shown on Done
-
     // Hold-duration presets. Each stop has its own dead-zone buffer and charge
     // sweep (how long the ring fills); the dissolve and swell are constant. The
     // full trigger time is buffer + charge. "Instant" skips the animation
@@ -598,125 +596,6 @@ class SettingsWindow: NSWindow {
 
     deinit {
         DistributedNotificationCenter.default().removeObserver(self)
-    }
-
-    // MARK: - "Settings saved" toast
-
-    /// A small, self-dismissing HUD shown when the user clicks Done: confirms the
-    /// save and reminds how to get back. Floats centered where the window was,
-    /// fades in, holds briefly, then fades out and disposes itself.
-    private func showSavedToast() {
-        let padH: CGFloat = 30, padTop: CGFloat = 24, padBottom: CGFloat = 22
-        let iconSize: CGFloat = 42
-        let iconGap: CGFloat = 12
-        let titleH: CGFloat = 26
-        let titleBodyGap: CGFloat = 6
-
-        let bodyPara = NSMutableParagraphStyle()
-        bodyPara.alignment = .center
-        let bodyStr = NSAttributedString(
-            string: "Open Key54 from the Finder to change these settings again.",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: bodyPara,
-            ])
-        // Size the toast to fit the body on a single line.
-        let bodyMeasure = bodyStr.boundingRect(
-            with: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading])
-        let bodyW = ceil(bodyMeasure.width)
-        let bodyH = ceil(bodyMeasure.height)
-        let w = bodyW + padH * 2
-        let h = padTop + iconSize + iconGap + titleH + titleBodyGap + bodyH + padBottom
-
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h),
-                            styleMask: [.borderless, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isReleasedWhenClosed = false
-        panel.ignoresMouseEvents = true
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-        let effect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: w, height: h))
-        effect.material = .hudWindow
-        effect.blendingMode = .behindWindow
-        effect.state = .active
-        effect.maskImage = Self.roundedMaskImage(radius: 18)
-        panel.contentView = effect
-
-        if let img = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) {
-            let iv = NSImageView(image: img)
-            iv.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: iconSize, weight: .regular)
-            iv.contentTintColor = .controlAccentColor
-            iv.imageScaling = .scaleProportionallyUpOrDown
-            iv.frame = NSRect(x: (w - iconSize) / 2, y: h - padTop - iconSize, width: iconSize, height: iconSize)
-            effect.addSubview(iv)
-        }
-
-        let title = NSTextField(labelWithString: "Settings saved!")
-        title.font = .systemFont(ofSize: 18, weight: .semibold)
-        title.alignment = .center
-        title.frame = NSRect(x: padH, y: h - padTop - iconSize - iconGap - titleH, width: w - padH * 2, height: titleH)
-        effect.addSubview(title)
-
-        let body = NSTextField(labelWithAttributedString: bodyStr)
-        body.alignment = .center
-        body.maximumNumberOfLines = 0
-        body.frame = NSRect(x: padH, y: padBottom, width: bodyW, height: bodyH)
-        effect.addSubview(body)
-
-        // Centered where the settings window is (captured before it orders out).
-        panel.setFrameOrigin(NSPoint(x: frame.midX - w / 2, y: frame.midY - h / 2))
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
-        savedToast = panel
-
-        // Liquid-glass "giggle": spring up to full size with a little overshoot
-        // (scaled about the toast's center), while fading in.
-        if let layer = effect.layer {
-            layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-            layer.position = CGPoint(x: w / 2, y: h / 2)
-            let spring = CASpringAnimation(keyPath: "transform.scale")
-            spring.fromValue = 0.82
-            spring.toValue = 1.0
-            spring.mass = 1
-            spring.stiffness = 260
-            spring.damping = 11
-            spring.initialVelocity = 6
-            spring.duration = spring.settlingDuration
-            layer.add(spring, forKey: "giggle")
-        }
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.16
-            panel.animator().alphaValue = 1
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 1.4
-                panel.animator().alphaValue = 0
-            }, completionHandler: {
-                panel.orderOut(nil)
-                self?.savedToast = nil
-            })
-        }
-    }
-
-    /// Stretchable rounded-rect mask so NSVisualEffectView's blur is clipped to
-    /// the shape (a layer cornerRadius alone won't clip the material).
-    private static func roundedMaskImage(radius r: CGFloat) -> NSImage {
-        let edge = r * 2 + 1
-        let img = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
-            return true
-        }
-        img.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
-        img.resizingMode = .stretch
-        return img
     }
 
     // MARK: - Layout
@@ -1117,7 +996,6 @@ class SettingsWindow: NSWindow {
 
     @objc private func saveAndClose() {
         appDelegate?.settingsClosed()
-        showSavedToast()        // build the toast at the window's center before it orders out
         orderOut(nil)
     }
 
@@ -1460,8 +1338,11 @@ final class TriggerHUD {
                                  y: size / 2 - iconSize / 2,
                                  width: iconSize, height: iconSize)
         if let icon {
-            var rect = CGRect(origin: .zero, size: icon.size)
+            let scale = NSScreen.main?.backingScaleFactor ?? 2
+            let targetPixels = CGSize(width: iconSize * scale, height: iconSize * scale)
+            var rect = CGRect(origin: .zero, size: targetPixels)
             iconLayer.contents = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+            iconLayer.contentsScale = scale
         }
         CATransaction.commit()
 
@@ -1838,14 +1719,4 @@ final class TriggerHUD {
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
-
-// Minimal main menu so ⌘Q works even though the app has no menu bar.
-let mainMenu = NSMenu()
-let appMenuItem = NSMenuItem()
-mainMenu.addItem(appMenuItem)
-let appMenu = NSMenu()
-appMenu.addItem(withTitle: "Quit Key54", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-appMenuItem.submenu = appMenu
-app.mainMenu = mainMenu
-
 app.run()
