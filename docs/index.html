@@ -1991,7 +1991,7 @@
                     <div class="seg active" data-text="Pick the app you context-switch to most often.">Step 1</div>
                     <div class="seg" data-text="Select a hold duration you find comfortable.">Step 2</div>
                     <div class="seg" data-text="Choose the animation style you like best.">Step 3</div>
-                    <div class="seg check" data-text="Done — you're all set!">✓</div>
+                    <div class="seg check" data-text="Click Save — you're all set!">✓</div>
                 </div>
                 <div class="stepdesc" id="stepdesc">Pick the app you context-switch to most often.</div>
             </div>
@@ -2283,7 +2283,7 @@
                 resetRing();
 
                 // Auto-rotate the setup steps when the section scrolls into view:
-                // activate each in order, pause a little longer on Done, then loop.
+                // activate each in order, pause a little longer on the last step, then loop.
                 // Clicking any segment stops the rotation and hands control to the user.
                 var segs = Array.prototype.slice.call(
                         document.querySelectorAll(".stepper .seg"),
@@ -2297,7 +2297,7 @@
                     stopped = false;
                 // hand pointer target per step: [left%, top%] over the screenshot
                 // Step 1 → Change Application, Step 2 → duration slider,
-                // Step 3 → Power Up, Done → Done button
+                // Step 3 → Power Up, ✓ → Save button
                 var HAND = [
                     [50, 53.5],
                     [50, 68],
