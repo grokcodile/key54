@@ -23,7 +23,15 @@ It runs as a background agent — no Dock icon, no menu bar item — and starts 
 
 ## Install
 
-### Download the disk image (recommended)
+### Homebrew (easiest — also handles updates)
+
+```sh
+brew install --cask grokcodile/tap/key54
+```
+
+New versions arrive with `brew upgrade --cask key54`.
+
+### Download the disk image
 
 1. Download the latest **[Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg)** (or browse [all releases](https://github.com/grokcodile/key54/releases)).
 2. Open the `.dmg` and drag **Key54** into your `Applications` folder.
