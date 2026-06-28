@@ -29,13 +29,7 @@ Open the `.dmg` and drag **Key54** into your `Applications` folder.
 
 > **Apple Silicon only.** The released build is arm64; it won't run on Intel Macs. Intel users can [build from source](#build).
 >
-> **First launch:** the build isn't notarized yet, so macOS will warn that it's from an unidentified developer. You only need to clear this once, in any of these ways:
->
-> - **macOS 13–14:** right-click (or Control-click) **Key54 → Open**, then click **Open** in the dialog.
-> - **macOS 15 (Sequoia) and later:** double-click it (it gets blocked), then go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**.
-> - **Terminal (any version):** `xattr -dr com.apple.quarantine /Applications/Key54.app`
->
-> Prefer no warning at all? [Build from source](#build) — a locally built app isn't quarantined and just runs.
+> **First launch:** the released build is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning. macOS may show a one-time "downloaded from the Internet" confirmation; just click **Open**. (Apps you [build from source](#build) are ad-hoc signed and not notarized, so those *do* show the unidentified-developer warning, which you clear once by right-clicking **Key54 → Open**.)
 
 ## Requirements
 
@@ -59,7 +53,7 @@ This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc c
 2. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Key54. This lets it detect the right Command key.
 3. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
 4. Optionally pick a **Hold Duration** preset (how long you hold before it triggers) — or choose **Custom** and dial in your own timings — and an **Animation Style** (Power Up or Level Up).
-5. Click **Done**. Key54 keeps running in the background (and starts automatically at login).
+5. Click **Save**. Key54 keeps running in the background (and starts automatically at login).
 
 To change the app or settings later, just open Key54 again from `Applications`.
 
@@ -84,25 +78,42 @@ Pick how the hold is visualized while it charges. It only affects the presets th
 
 ## Uninstall
 
-1. Quit Key54 (open it and click **Quit**, or `killall Key54`).
-2. Drag **Key54** from `Applications` to the Trash. This also removes its login item.
+1. Open Key54 and turn **off** the Enable switch at the top. This stops it running in the background and removes its login item, and the button below becomes **Quit** — click it. (Or `killall Key54`.)
+2. Drag **Key54** from `Applications` to the Trash.
 3. Optionally remove its entry under System Settings → Privacy & Security → Accessibility.
 
 ## Releases
 
-Pushing a version tag (e.g. `v1.0`) triggers the GitHub Actions release workflow
-(`.github/workflows/release.yml`), which builds the app, packages a `.dmg`, and
-attaches it to a GitHub Release.
+Both paths produce a signed + notarized + stapled `.dmg`, so users get no
+Gatekeeper warning.
+
+**Locally** — needs a *Developer ID Application* certificate in your keychain:
 
 ```sh
-git tag v1.0
-git push origin v1.0
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" bash release.sh
 ```
 
-By default the `.dmg` is ad-hoc signed (other Macs will show a Gatekeeper
-warning). To produce a signed + notarized build, add these repository secrets
-(Settings → Secrets and variables → Actions) — the workflow detects them
-automatically:
+`release.sh` builds, signs (Hardened Runtime + secure timestamp), notarizes and
+staples the app, packages the `.dmg`, then notarizes and staples that too —
+leaving `dist/Key54.dmg` ready to distribute. Provide notary credentials any one
+of three ways:
+
+- `AC_USERNAME` + `AC_PASSWORD` — Apple ID + app-specific password, or
+- `AC_API_KEY_ID` + `AC_API_ISSUER_ID` + `AC_API_KEY_PATH` — App Store Connect API key (`.p8`), or
+- `AC_API_KEY_ID` + `AC_API_ISSUER_ID` — with the `.p8` stored in your login keychain as `key54-notary-key`.
+
+**Via GitHub Actions** — pushing a version tag (e.g. `v1.17`) triggers
+`.github/workflows/release.yml`, which builds, notarizes/staples, packages the
+`.dmg`, and attaches it to a GitHub Release:
+
+```sh
+git tag v1.17
+git push origin v1.17
+```
+
+Add these repository secrets (Settings → Secrets and variables → Actions) — the
+workflow signs + notarizes automatically when they're present, and falls back to
+an ad-hoc `.dmg` (Gatekeeper warning) when they're not:
 
 | Secret | Purpose |
 | --- | --- |

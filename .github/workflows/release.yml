@@ -46,6 +46,24 @@ jobs:
       - name: Build
         run: bash build.sh
 
+      # Staple the app itself (not just the DMG) so a copy dragged out of the DMG
+      # launches cleanly even offline. Runs before the DMG is built.
+      - name: Notarize & staple app
+        if: env.HAS_NOTARY == 'true'
+        env:
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+          AC_API_KEY_BASE64: ${{ secrets.AC_API_KEY_BASE64 }}
+        run: |
+          echo "$AC_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/key.p8"
+          ditto -c -k --keepParent "build/Key54.app" "$RUNNER_TEMP/Key54.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/Key54.zip" \
+            --key "$RUNNER_TEMP/key.p8" \
+            --key-id "$AC_API_KEY_ID" \
+            --issuer "$AC_API_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "build/Key54.app"
+
       - name: Package DMG
         run: |
           mkdir -p dist/dmgroot
@@ -54,7 +72,7 @@ jobs:
           hdiutil create -volname "Key54" -srcfolder dist/dmgroot \
             -ov -format UDZO "dist/Key54.dmg"
 
-      - name: Notarize & staple
+      - name: Notarize & staple DMG
         if: env.HAS_NOTARY == 'true'
         env:
           AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}

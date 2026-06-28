@@ -66,41 +66,58 @@ if [ "$HAVE_AC_PASS" -eq 0 ] && [ "$HAVE_AC_API" -eq 0 ]; then
     exit 1
 fi
 
+# ── notarize <file>: submit and wait, with whichever credentials we have ─────
+
+notarize() {
+    local file="$1"
+    if [ "$HAVE_AC_API" -eq 1 ]; then
+        xcrun notarytool submit "$file" \
+            --key "${AC_API_KEY_PATH}" \
+            --key-id "${AC_API_KEY_ID}" \
+            --issuer "${AC_API_ISSUER_ID}" \
+            --wait
+    else
+        xcrun notarytool submit "$file" \
+            --apple-id "${AC_USERNAME}" \
+            --team-id "$(echo "${SIGN_IDENTITY}" | sed -n 's/.*(\(.*\))/\1/p')" \
+            --password "${AC_PASSWORD}" \
+            --wait
+    fi
+}
+
 # ── Step 1: Build & sign ───────────────────────────────────────────────────
 
 echo "==> Building and signing with '${SIGN_IDENTITY}'..."
 SIGN_IDENTITY="${SIGN_IDENTITY}" bash build.sh
 
-# ── Step 2: Package DMG ───────────────────────────────────────────────────
+rm -rf dist
+mkdir -p dist
+
+# ── Step 2: Notarize & staple the .app ─────────────────────────────────────
+# Staple the app itself (not just the DMG) so a copy dragged out of the DMG
+# launches cleanly even offline — Gatekeeper reads the embedded ticket without
+# a network round-trip.
+
+echo "==> Notarizing ${APP_NAME}.app..."
+APP_ZIP="dist/${APP_NAME}.zip"
+ditto -c -k --keepParent "build/${APP_NAME}.app" "$APP_ZIP"
+notarize "$APP_ZIP"
+xcrun stapler staple "build/${APP_NAME}.app"
+rm -f "$APP_ZIP"
+
+# ── Step 3: Package DMG (from the now-stapled app) ─────────────────────────
 
 echo "==> Packaging ${DMG_NAME}..."
-rm -rf dist
 mkdir -p dist/dmgroot
 cp -R "build/${APP_NAME}.app" dist/dmgroot/
 ln -s /Applications dist/dmgroot/Applications
 hdiutil create -volname "${APP_NAME}" -srcfolder dist/dmgroot \
     -ov -format UDZO "${DMG_PATH}"
 
-# ── Step 3: Notarize ──────────────────────────────────────────────────────
+# ── Step 4: Notarize & staple the DMG ──────────────────────────────────────
 
-echo "==> Submitting ${DMG_NAME} for notarization..."
-if [ "$HAVE_AC_API" -eq 1 ]; then
-    xcrun notarytool submit "${DMG_PATH}" \
-        --key "${AC_API_KEY_PATH}" \
-        --key-id "${AC_API_KEY_ID}" \
-        --issuer "${AC_API_ISSUER_ID}" \
-        --wait
-else
-    xcrun notarytool submit "${DMG_PATH}" \
-        --apple-id "${AC_USERNAME}" \
-        --team-id "$(echo "${SIGN_IDENTITY}" | sed -n 's/.*(\(.*\))/\1/p')" \
-        --password "${AC_PASSWORD}" \
-        --wait
-fi
-
-# ── Step 4: Staple ─────────────────────────────────────────────────────────
-
-echo "==> Stapling notarization ticket..."
+echo "==> Notarizing ${DMG_NAME}..."
+notarize "${DMG_PATH}"
 xcrun stapler staple "${DMG_PATH}"
 
 echo ""

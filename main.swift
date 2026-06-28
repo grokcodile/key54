@@ -1719,4 +1719,20 @@ final class TriggerHUD {
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
+
+// Minimal menu: ⌘W closes the settings window. Deliberately NO ⌘Q — the app is a
+// background agent, so quitting is intentional only (turn the switch off, then
+// click Quit), preventing an accidental ⌘Q from killing it.
+let mainMenu = NSMenu()
+let appMenuItem = NSMenuItem()
+mainMenu.addItem(appMenuItem)
+appMenuItem.submenu = NSMenu()   // empty app menu (no Quit item)
+
+let windowMenuItem = NSMenuItem()
+mainMenu.addItem(windowMenuItem)
+let windowMenu = NSMenu(title: "Window")
+windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+windowMenuItem.submenu = windowMenu
+app.mainMenu = mainMenu
+
 app.run()
