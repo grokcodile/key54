@@ -58,6 +58,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // safe even while disabled.
         startEventTap()
 
+        // Build the HUD overlay now, while we're (almost always) on a normal
+        // Space, so it can appear over full-screen Spaces the user enters later.
+        // Creating it lazily on the first trigger risks that first trigger landing
+        // inside an already-open full-screen Space, which it could never overlay.
+        hud.prewarm()
+
         // A user-initiated launch (Finder / Spotlight / Launchpad / Dock / `open`)
         // opens straight to settings. A login auto-launch by launchd stays silent
         // in the background. `applicationShouldHandleReopen` covers the case where
@@ -1286,6 +1292,21 @@ final class TriggerHUD {
         // safe ARC disposal pattern: close to dismiss, nil to deallocate.
         _panel?.close()
         _panel = nil
+    }
+
+    /// Build and register the panel now (at launch), so it pre-dates any
+    /// full-screen Space the user later enters. macOS only adds a
+    /// `canJoinAllSpaces` + `fullScreenAuxiliary` window to full-screen Spaces
+    /// created *after* the window exists — a panel built lazily during the first
+    /// summon, while a full-screen Space is already up, never joins it, so the
+    /// HUD silently fails over that Space until it's recreated. Ordering it front
+    /// once while fully transparent (then out) registers it without ever showing
+    /// anything.
+    func prewarm() {
+        let p = panel
+        p.alphaValue = 0
+        p.orderFrontRegardless()
+        p.orderOut(nil)
     }
 
     // MARK: Public
