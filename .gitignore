@@ -7,5 +7,7 @@ AppIcon.icns
 developer.jpg
 CLAUDE.md
 
-# Notarization key — never commit
-notary-key.p8
+# Apple signing / notarization keys — never commit
+# (base64 these into the GitHub Actions secrets instead)
+*.p8
+*.p12
