@@ -43,6 +43,17 @@ jobs:
           echo "Using identity: $IDENTITY"
           echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
+      # The git tag is the single source of truth for the version: stamp it into
+      # Info.plist before building so the app version can never drift from the
+      # release (v1.18 → 1.18). Skipped on manual runs (no tag).
+      - name: Stamp version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Stamping app version: $VERSION"
+          plutil -replace CFBundleShortVersionString -string "$VERSION" Info.plist
+          plutil -replace CFBundleVersion -string "$VERSION" Info.plist
+
       - name: Build
         run: bash build.sh
 
@@ -87,7 +98,9 @@ jobs:
             --wait
           xcrun stapler staple "dist/Key54.dmg"
 
+      # Only a tag push publishes; a manual run builds + notarizes as a dry-run.
       - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/Key54.dmg

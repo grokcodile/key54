@@ -84,36 +84,25 @@ Pick how the hold is visualized while it charges. It only affects the presets th
 
 ## Releases
 
-Both paths produce a signed + notarized + stapled `.dmg`, so users get no
-Gatekeeper warning.
-
-**Locally** — needs a *Developer ID Application* certificate in your keychain:
+Releases are cut entirely by GitHub Actions (`.github/workflows/release.yml`).
+To publish a new version, push a version tag — that's the whole process:
 
 ```sh
-SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" bash release.sh
+git tag v1.18
+git push origin main --tags
 ```
 
-`release.sh` builds, signs (Hardened Runtime + secure timestamp), notarizes and
-staples the app, packages the `.dmg`, then notarizes and staples that too —
-leaving `dist/Key54.dmg` ready to distribute. Provide notary credentials any one
-of three ways:
+The workflow then automatically:
 
-- `AC_USERNAME` + `AC_PASSWORD` — Apple ID + app-specific password, or
-- `AC_API_KEY_ID` + `AC_API_ISSUER_ID` + `AC_API_KEY_PATH` — App Store Connect API key (`.p8`), or
-- `AC_API_KEY_ID` + `AC_API_ISSUER_ID` — with the `.p8` stored in your login keychain as `key54-notary-key`.
+1. **Stamps the version from the tag** (`v1.18` → `1.18`) into `Info.plist`, so the app version can never drift from the release — you never edit the version by hand.
+2. **Builds and signs** the app (Developer ID, Hardened Runtime, secure timestamp).
+3. **Notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
+4. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Download](#download) link points to.
 
-**Via GitHub Actions** — pushing a version tag (e.g. `v1.17`) triggers
-`.github/workflows/release.yml`, which builds, notarizes/staples, packages the
-`.dmg`, and attaches it to a GitHub Release:
-
-```sh
-git tag v1.17
-git push origin v1.17
-```
-
-Add these repository secrets (Settings → Secrets and variables → Actions) — the
-workflow signs + notarizes automatically when they're present, and falls back to
-an ad-hoc `.dmg` (Gatekeeper warning) when they're not:
+**One-time setup.** Add these repository secrets (Settings → Secrets and
+variables → Actions). With all five set, the workflow signs + notarizes; without
+them it falls back to an ad-hoc `.dmg` that triggers a Gatekeeper warning — so
+set them before any public release:
 
 | Secret | Purpose |
 | --- | --- |
@@ -122,6 +111,9 @@ an ad-hoc `.dmg` (Gatekeeper warning) when they're not:
 | `AC_API_KEY_ID` | App Store Connect API **Key ID** |
 | `AC_API_ISSUER_ID` | App Store Connect API **Issuer ID** |
 | `AC_API_KEY_BASE64` | Base64 of the `AuthKey_XXXX.p8` |
+
+> Want a dry run? Trigger the workflow manually from the **Actions** tab — it
+> builds and notarizes but skips publishing (no tag, no release).
 
 ## How it works
 
