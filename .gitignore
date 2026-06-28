@@ -6,3 +6,6 @@ AppIcon.iconset/
 AppIcon.icns
 developer.jpg
 CLAUDE.md
+
+# Notarization key — never commit
+notary-key.p8
