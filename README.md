@@ -21,31 +21,34 @@ It runs as a background agent — no Dock icon, no menu bar item — and starts 
 - Correctly returns you to the previous app, including full-screen apps and apps with no open windows.
 - Runs silently as a background agent and starts at login.
 
-## Download
+## Install
 
-**Download the latest [Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg) — or see [all releases](https://github.com/grokcodile/key54/releases).** *This link always points to the most recent release build.*
+### Download the disk image (recommended)
 
-Open the `.dmg` and drag **Key54** into your `Applications` folder.
+1. Download the latest **[Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg)** (or browse [all releases](https://github.com/grokcodile/key54/releases)).
+2. Open the `.dmg` and drag **Key54** into your `Applications` folder.
 
-> **Apple Silicon only.** The released build is arm64; it won't run on Intel Macs. Intel users can [build from source](#build).
->
-> **First launch:** the released build is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning. macOS may show a one-time "downloaded from the Internet" confirmation; just click **Open**. (Apps you [build from source](#build) are ad-hoc signed and not notarized, so those *do* show the unidentified-developer warning, which you clear once by right-clicking **Key54 → Open**.)
+The released build is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning. macOS may show a one-time "downloaded from the Internet" confirmation; just click **Open**.
 
-## Requirements
+> **Apple Silicon only.** The released `.dmg` is arm64; it won't run on Intel Macs — [build from source](#build-from-source) instead.
 
-- macOS 13 or later.
-- **Apple Silicon** — the released `.dmg` is arm64-only. (Intel Macs can build from source.)
-- **Accessibility permission** (System Settings → Privacy & Security → Accessibility) so it can detect the right Command key.
+### Build from source
 
-## Build
+Works on any Mac (including Intel):
 
 ```sh
 bash install.sh
 ```
 
-This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc code-signs, installs to `/Applications/Key54.app`, and launches it. On first run, grant Accessibility permission when prompted.
+This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc code-signs, installs to `/Applications/Key54.app`, and launches it. An ad-hoc build isn't notarized, so its first launch shows the "unidentified developer" warning — clear it once by right-clicking **Key54 → Open**.
 
 > Optional: install [`pngquant`](https://pngquant.org) to shrink the generated icon.
+
+## Requirements
+
+- macOS 13 or later.
+- **Apple Silicon** for the released `.dmg` (Intel Macs can [build from source](#build-from-source)).
+- **Accessibility permission** (System Settings → Privacy & Security → Accessibility) so it can detect the right Command key.
 
 ## First run
 
@@ -97,7 +100,7 @@ The workflow then automatically:
 1. **Stamps the version from the tag** (`v1.18` → `1.18`) into `Info.plist`, so the app version can never drift from the release — you never edit the version by hand.
 2. **Builds and signs** the app (Developer ID, Hardened Runtime, secure timestamp).
 3. **Notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
-4. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Download](#download) link points to.
+4. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Install](#install) download link points to.
 
 **One-time setup.** Add these repository secrets (Settings → Secrets and
 variables → Actions). With all five set, the workflow signs + notarizes; without
