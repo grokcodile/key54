@@ -12,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // True while we're waiting for the user to grant Accessibility (the event tap
     // couldn't be created yet) — lets app-reactivation reliably catch the grant.
     private var awaitingAccessibility = false
+    private var axPollTimer: Timer?   // polls AXIsProcessTrusted() while awaiting
 
     // Cached target so the app-switch notification path does no disk I/O.
     private var cachedURL: URL?
@@ -320,15 +321,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         guard let tap else {
-            // No permission yet: watch for the (unreliable) system notification,
-            // and flag that we're waiting so reactivation can also catch the grant.
-            awaitingAccessibility = true
-            DistributedNotificationCenter.default().addObserver(
-                self,
-                selector: #selector(axPermissionChanged),
-                name: NSNotification.Name("com.apple.accessibility.api"),
-                object: nil
-            )
+            beginAwaitingAccessibility()   // no permission yet
             return
         }
 
@@ -349,14 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         teardownTap()
-        guard !awaitingAccessibility else { return }
-        awaitingAccessibility = true
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(axPermissionChanged),
-            name: NSNotification.Name("com.apple.accessibility.api"),
-            object: nil
-        )
+        beginAwaitingAccessibility()
         settingsWindow?.refreshAxBanner()
     }
 
@@ -452,13 +438,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // trust flag actually flips.
     func applicationDidBecomeActive(_ notification: Notification) { handleAccessibilityGrant() }
 
-    /// Once Accessibility is granted — spotted via the notification or app
-    /// reactivation — start the event tap and clear the settings warning. No-op
-    /// unless we were actually waiting and are now trusted, so it's cheap to call
-    /// on every activation.
+    /// Enter the "waiting for Accessibility" state, watching for the grant three
+    /// ways: the com.apple.accessibility.api notification, app reactivation, and a
+    /// 1 s poll of AXIsProcessTrusted(). The notification is unreliable and the
+    /// trust value can read stale right after a grant, so the poll is the
+    /// dependable backstop. It runs only while we're waiting and stops the instant
+    /// permission lands.
+    private func beginAwaitingAccessibility() {
+        guard !awaitingAccessibility else { return }
+        awaitingAccessibility = true
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(axPermissionChanged),
+            name: NSNotification.Name("com.apple.accessibility.api"),
+            object: nil
+        )
+        axPollTimer?.invalidate()
+        axPollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.handleAccessibilityGrant()
+        }
+    }
+
+    /// Once Accessibility is granted — spotted via the notification, app
+    /// reactivation, or the poll — start the event tap and clear the settings
+    /// warning. No-op unless we were waiting and are now trusted.
     private func handleAccessibilityGrant() {
         guard awaitingAccessibility, AXIsProcessTrusted() else { return }
         awaitingAccessibility = false
+        axPollTimer?.invalidate()
+        axPollTimer = nil
         DistributedNotificationCenter.default().removeObserver(
             self, name: NSNotification.Name("com.apple.accessibility.api"), object: nil)
         startEventTap()
