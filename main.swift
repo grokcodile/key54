@@ -12,7 +12,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // True while we're waiting for the user to grant Accessibility (the event tap
     // couldn't be created yet) — lets app-reactivation reliably catch the grant.
     private var awaitingAccessibility = false
-    private var axPollTimer: Timer?   // polls AXIsProcessTrusted() while awaiting
+    private var axPollTimer: Timer?            // retries the tap while awaiting permission
+    private var lastTapDisable: TimeInterval = 0
+    private var tapDisableStreak = 0
+    /// Whether the event tap is currently up — our authoritative permission signal.
+    /// More reliable than AXIsProcessTrusted(), which lags both grants and revokes.
+    var hasAccessibility: Bool { !awaitingAccessibility }
 
     // Cached target so the app-switch notification path does no disk I/O.
     private var cachedURL: URL?
@@ -57,11 +62,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if appEnabled, SMAppService.mainApp.status != .enabled {
             try? SMAppService.mainApp.register()
         }
-        // Always install the event tap — and, when permission is missing, the
-        // observer inside it that refreshes the window once permission is granted.
-        // The trigger itself is gated by appEnabled in scheduleToggle(), so this is
-        // safe even while disabled.
-        startEventTap()
+        // Install the event tap; if permission is missing it can't be created, so
+        // enter the awaiting state (warning + retry). The trigger is gated by
+        // appEnabled in scheduleToggle(), so installing while disabled is harmless.
+        if !startEventTap() { beginAwaitingAccessibility() }
 
         // Build the HUD overlay now, while we're (almost always) on a normal
         // Space, so it can appear over full-screen Spaces the user enters later.
@@ -86,7 +90,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if SMAppService.mainApp.status != .enabled {
                 try? SMAppService.mainApp.register()
             }
-            startEventTap()
+            if !startEventTap() { beginAwaitingAccessibility() }
         } else {
             try? SMAppService.mainApp.unregister()
             // The tap stays installed but scheduleToggle() ignores it while
@@ -282,10 +286,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         selectedPreset == 4 ? customAnimationLength : SettingsWindow.animationLengthValues[selectedPreset]
     }
 
-    private func startEventTap() {
+    /// Create (or re-enable) the event tap. Returns whether we now have a working
+    /// tap — false means Accessibility isn't granted (tapCreate is the real check,
+    /// more reliable than AXIsProcessTrusted()).
+    @discardableResult
+    private func startEventTap() -> Bool {
         // Idempotent: if the tap already exists (e.g. re-enabling via the master
         // switch), just turn it back on instead of creating a second one.
-        if let tap { CGEvent.tapEnable(tap: tap, enable: true); return }
+        if let tap { CGEvent.tapEnable(tap: tap, enable: true); return true }
 
         // NOTE: must be an active (.defaultTap) tap — a .listenOnly tap here
         // stops delivering after the first toggle in practice. We pass every
@@ -320,27 +328,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         )
 
-        guard let tap else {
-            beginAwaitingAccessibility()   // no permission yet
-            return
-        }
+        guard let tap else { return false }   // no permission — caller awaits
 
         let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         tapSource = source
         CGEvent.tapEnable(tap: tap, enable: true)
+        return true
     }
 
-    /// The system disabled our tap. If we still have Accessibility permission the
-    /// disable is transient (e.g. a slow-callback timeout) and we just re-enable.
-    /// If permission was REVOKED, re-enabling is refused and instantly re-disabled
-    /// — an endless disable/enable loop that saturates the run loop and hangs all
-    /// input — so instead we tear the tap down and wait for the user to re-grant.
+    /// The system disabled our tap. A lone disable is transient (e.g. a slow-
+    /// callback timeout) — re-enable it. A rapid burst means permission was revoked
+    /// and the system re-disables whatever we enable; left alone that loop saturates
+    /// the run loop and hangs all input, so detect the burst and stand down. We do
+    /// NOT consult AXIsProcessTrusted() here — it reads stale-true right after a
+    /// revoke and can block while TCC is mid-change (that's what made this hang).
     func eventTapDisabled() {
-        if AXIsProcessTrusted() {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-            return
-        }
+        guard !awaitingAccessibility else { return }   // already stood down
+        let now = ProcessInfo.processInfo.systemUptime
+        tapDisableStreak = (now - lastTapDisable < 1.0) ? tapDisableStreak + 1 : 1
+        lastTapDisable = now
+        if tapDisableStreak >= 3 { standDownForAccessibility(); return }
+        if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+    }
+
+    /// Permission looks gone: drop the tap and wait for a re-grant (showing the
+    /// warning). The window's permission state follows the tap — not the laggy
+    /// AXIsProcessTrusted() — so it reverts correctly.
+    private func standDownForAccessibility() {
+        tapDisableStreak = 0
         teardownTap()
         beginAwaitingAccessibility()
         settingsWindow?.refreshAxBanner()
@@ -430,20 +446,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if hudVisible { hud.cancel(fade: SettingsWindow.fadeConstant); hudVisible = false }
     }
 
-    @objc private func axPermissionChanged() { handleAccessibilityGrant() }
+    @objc private func axPermissionChanged() { recoverIfPermitted() }
 
-    // App reactivation is the reliable second chance to notice a permission grant:
-    // the user must leave Key54 for System Settings and come back, whereas the
-    // com.apple.accessibility.api notification often misses or fires before the
-    // trust flag actually flips.
-    func applicationDidBecomeActive(_ notification: Notification) { handleAccessibilityGrant() }
+    // App reactivation is a reliable second chance to notice a re-grant: the user
+    // had to leave Key54 for System Settings and come back. The
+    // com.apple.accessibility.api notification often misses, so this backs it up.
+    func applicationDidBecomeActive(_ notification: Notification) { recoverIfPermitted() }
 
     /// Enter the "waiting for Accessibility" state, watching for the grant three
     /// ways: the com.apple.accessibility.api notification, app reactivation, and a
-    /// 1 s poll of AXIsProcessTrusted(). The notification is unreliable and the
-    /// trust value can read stale right after a grant, so the poll is the
-    /// dependable backstop. It runs only while we're waiting and stops the instant
-    /// permission lands.
+    /// 1 s retry. We retry by simply trying to create the tap again — the
+    /// authoritative permission check — since AXIsProcessTrusted() is unreliable.
+    /// The retry stops the instant the tap comes back.
     private func beginAwaitingAccessibility() {
         guard !awaitingAccessibility else { return }
         awaitingAccessibility = true
@@ -455,21 +469,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         axPollTimer?.invalidate()
         axPollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            self?.handleAccessibilityGrant()
+            self?.recoverIfPermitted()
         }
     }
 
-    /// Once Accessibility is granted — spotted via the notification, app
-    /// reactivation, or the poll — start the event tap and clear the settings
-    /// warning. No-op unless we were waiting and are now trusted.
-    private func handleAccessibilityGrant() {
-        guard awaitingAccessibility, AXIsProcessTrusted() else { return }
+    /// If permission is back, the tap creates successfully — then leave the waiting
+    /// state and refresh the window. No-op while still unpermitted.
+    private func recoverIfPermitted() {
+        guard awaitingAccessibility, startEventTap() else { return }
         awaitingAccessibility = false
         axPollTimer?.invalidate()
         axPollTimer = nil
         DistributedNotificationCenter.default().removeObserver(
             self, name: NSNotification.Name("com.apple.accessibility.api"), object: nil)
-        startEventTap()
         settingsWindow?.refreshAxBanner()
     }
 }
@@ -665,7 +677,7 @@ class SettingsWindow: NSWindow {
     // MARK: - Layout
 
     private func rebuild() {
-        let hasPermission = AXIsProcessTrusted()
+        let hasPermission = appDelegate?.hasAccessibility ?? AXIsProcessTrusted()
         let enabled = appDelegate?.appEnabled ?? true
         let switchOn = hasPermission && enabled          // the app is actually on
         let showSwitch = hasPermission                   // switch + description hidden until permission is granted
