@@ -64,7 +64,7 @@ This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc c
 2. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Key54. This lets it detect the right Command key.
 3. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
 4. Optionally pick a **Hold Duration** preset (how long you hold before it triggers) — or choose **Custom** and dial in your own timings — and an **Animation Style** (Power Up or Level Up).
-5. Click **Save**. Key54 keeps running in the background (and starts automatically at login).
+5. Click **Done**. Key54 keeps running in the background (and starts automatically at login).
 
 To change the app or settings later, just open Key54 again from `Applications`.
 
@@ -89,7 +89,7 @@ Pick how the hold is visualized while it charges. It only affects the presets th
 
 ## Uninstall
 
-1. Open Key54 and turn **off** the Enable switch at the top. This stops it running in the background and removes its login item, and the button below becomes **Quit** — click it. (Or `killall Key54`.)
+1. Open Key54 and click **Quit** (or toggle the switch to Disabled and click **Done**). (Or `killall Key54`.)
 2. Drag **Key54** from `Applications` to the Trash.
 3. Optionally remove its entry under System Settings → Privacy & Security → Accessibility.
 

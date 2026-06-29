@@ -966,20 +966,32 @@ class SettingsWindow: NSWindow {
         }
         }   // if enabled
 
-        // Centered bottom button: "Save" when the app is on (there are settings
-        // to keep), otherwise "Quit" — when off or unpermitted there's nothing to
-        // save and quitting is what the user wants.
+        // Bottom bar: Quit (secondary, left) + Done (primary, right); on disabled
+        // view only a centered Done (or Quit when permission is missing) button.
         let btnW: CGFloat = 100
-        let bottomBtn: NSButton
+        let btnH: CGFloat = 32
+        let sidePad: CGFloat = 70
+
+        let quitBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
+        quitBtn.frame = NSRect(x: sidePad, y: 20, width: btnW, height: btnH)
+        quitBtn.bezelStyle = .rounded
+        quitBtn.toolTip = "Quits until restarted or next login"
+
+        let doneBtn = NSButton(title: (switchOn || !showWarning) ? "Done" : "Quit",
+                               target: switchOn ? self : NSApp,
+                               action: switchOn ? #selector(saveAndClose) : #selector(NSApplication.terminate(_:)))
+        doneBtn.bezelStyle = .rounded
+        doneBtn.keyEquivalent = "\r"
+        doneBtn.contentTintColor = .systemBlue
+
         if switchOn {
-            bottomBtn = NSButton(title: "Save", target: self, action: #selector(saveAndClose))
-            bottomBtn.keyEquivalent = "\r"
+            doneBtn.frame = NSRect(x: contentW - sidePad - btnW, y: 20, width: btnW, height: btnH)
+            c.addSubview(quitBtn)
+            c.addSubview(doneBtn)
         } else {
-            bottomBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
+            doneBtn.frame = NSRect(x: (contentW - btnW) / 2, y: 20, width: btnW, height: btnH)
+            c.addSubview(doneBtn)
         }
-        bottomBtn.frame = NSRect(x: (contentW - btnW) / 2, y: 20, width: btnW, height: 32)
-        bottomBtn.bezelStyle = .rounded
-        c.addSubview(bottomBtn)
 
         // Tip Jar easter egg: a lone jar emoji tucked into the top-right of the
         // titlebar, mirroring the traffic lights on the left. Tooltip + hand
