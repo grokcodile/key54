@@ -4,6 +4,8 @@
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/grokcodile/key54)](LICENSE)
 
+<img src="docs/icon.png" alt="Key54 Icon" width="96"/>
+
 **Key54** is a tiny macOS utility that binds one app of your choice to the right Command key (keycode 54). Hold the right ⌘ to summon that app; hold it again to switch back to what you were doing. A built-in hold delay keeps quick taps and your normal right-⌘ shortcuts working as usual.
 
 It runs as a background agent — no Dock icon, no menu bar item — and starts at login.
@@ -20,6 +22,9 @@ It runs as a background agent — no Dock icon, no menu bar item — and starts 
 - A charge animation on a Liquid Glass bezel (macOS 26+; frosted glass on older systems), in two styles — **Power Up** and **Level Up** — following your System Settings accent color.
 - Correctly returns you to the previous app, including full-screen apps and apps with no open windows.
 - Runs silently as a background agent and starts at login.
+
+## Screenshot
+![Settings Window](/docs/settings.png)
 
 ## Install
 
