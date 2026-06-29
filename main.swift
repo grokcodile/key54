@@ -1017,7 +1017,6 @@ class SettingsWindow: NSWindow {
             let quitBtn = NSButton(title: "Quit", target: NSApp,
                                    action: #selector(NSApplication.terminate(_:)))
             quitBtn.bezelStyle = .rounded
-            quitBtn.toolTip = "Quit Key54 now — it returns at your next login (turn the switch off to stop that)."
             quitBtn.frame = NSRect(x: sidePad, y: barY, width: btnW, height: btnH)
             c.addSubview(quitBtn)
 
