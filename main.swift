@@ -6,6 +6,7 @@ import Carbon
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var tap: CFMachPort?
+    private var tapSource: CFRunLoopSource?
     private var previousApp: NSRunningApplication?
     private var settingsWindow: SettingsWindow?
     // True while we're waiting for the user to grant Accessibility (the event tap
@@ -298,7 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let delegate = Unmanaged<AppDelegate>.fromOpaque(userInfo!).takeUnretainedValue()
                 // Re-enable if the system ever disables the tap.
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    delegate.reenableTap()
+                    DispatchQueue.main.async { delegate.eventTapDisabled() }
                     return Unmanaged.passRetained(event)
                 }
                 guard event.getIntegerValueField(.keyboardEventKeycode) == 54 else {
@@ -333,11 +334,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        tapSource = source
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
-    func reenableTap() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+    /// The system disabled our tap. If we still have Accessibility permission the
+    /// disable is transient (e.g. a slow-callback timeout) and we just re-enable.
+    /// If permission was REVOKED, re-enabling is refused and instantly re-disabled
+    /// — an endless disable/enable loop that saturates the run loop and hangs all
+    /// input — so instead we tear the tap down and wait for the user to re-grant.
+    func eventTapDisabled() {
+        if AXIsProcessTrusted() {
+            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return
+        }
+        teardownTap()
+        guard !awaitingAccessibility else { return }
+        awaitingAccessibility = true
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(axPermissionChanged),
+            name: NSNotification.Name("com.apple.accessibility.api"),
+            object: nil
+        )
+        settingsWindow?.refreshAxBanner()
+    }
+
+    /// Fully dispose of the event tap (on Accessibility revoke). startEventTap()
+    /// builds a fresh one if permission returns.
+    private func teardownTap() {
+        guard let tap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
+        if let tapSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), tapSource, .commonModes) }
+        CFMachPortInvalidate(tap)
+        self.tap = nil
+        self.tapSource = nil
     }
 
     func scheduleToggle() {
