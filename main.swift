@@ -966,31 +966,33 @@ class SettingsWindow: NSWindow {
         }
         }   // if enabled
 
-        // Bottom bar: Quit (secondary, left) + Done (primary, right); on disabled
-        // view only a centered Done (or Quit when permission is missing) button.
-        let btnW: CGFloat = 100
-        let btnH: CGFloat = 32
+        // Bottom buttons. When Key54 is on: Quit (left) + Done (right, the default
+        // button). When it's off or unpermitted there's nothing to save, so just a
+        // centered Quit. Quit ends the process — it still returns at the next login
+        // unless the switch above is off (which unregisters the login item). The
+        // x positions match the centered 320-pt content column (app box / slider).
+        let btnW: CGFloat = 100, btnH: CGFloat = 32, barY: CGFloat = 20
         let sidePad: CGFloat = 70
 
-        let quitBtn = NSButton(title: "Quit", target: NSApp, action: #selector(NSApplication.terminate(_:)))
-        quitBtn.frame = NSRect(x: sidePad, y: 20, width: btnW, height: btnH)
-        quitBtn.bezelStyle = .rounded
-        quitBtn.toolTip = "Quits until restarted or next login"
-
-        let doneBtn = NSButton(title: (switchOn || !showWarning) ? "Done" : "Quit",
-                               target: switchOn ? self : NSApp,
-                               action: switchOn ? #selector(saveAndClose) : #selector(NSApplication.terminate(_:)))
-        doneBtn.bezelStyle = .rounded
-        doneBtn.keyEquivalent = "\r"
-        doneBtn.contentTintColor = .systemBlue
-
         if switchOn {
-            doneBtn.frame = NSRect(x: contentW - sidePad - btnW, y: 20, width: btnW, height: btnH)
+            let quitBtn = NSButton(title: "Quit", target: NSApp,
+                                   action: #selector(NSApplication.terminate(_:)))
+            quitBtn.bezelStyle = .rounded
+            quitBtn.toolTip = "Quit Key54 now — it returns at your next login (turn the switch off to stop that)."
+            quitBtn.frame = NSRect(x: sidePad, y: barY, width: btnW, height: btnH)
             c.addSubview(quitBtn)
+
+            let doneBtn = NSButton(title: "Done", target: self, action: #selector(saveAndClose))
+            doneBtn.bezelStyle = .rounded
+            doneBtn.keyEquivalent = "\r"   // the default (accent-tinted) button
+            doneBtn.frame = NSRect(x: contentW - sidePad - btnW, y: barY, width: btnW, height: btnH)
             c.addSubview(doneBtn)
         } else {
-            doneBtn.frame = NSRect(x: (contentW - btnW) / 2, y: 20, width: btnW, height: btnH)
-            c.addSubview(doneBtn)
+            let quitBtn = NSButton(title: "Quit", target: NSApp,
+                                   action: #selector(NSApplication.terminate(_:)))
+            quitBtn.bezelStyle = .rounded
+            quitBtn.frame = NSRect(x: (contentW - btnW) / 2, y: barY, width: btnW, height: btnH)
+            c.addSubview(quitBtn)
         }
 
         // Tip Jar easter egg: a lone jar emoji tucked into the top-right of the
