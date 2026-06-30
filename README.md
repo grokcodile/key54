@@ -1,3 +1,5 @@
+<img src="docs/icon.png" alt="Key54 Icon" width="96"/>
+
 # Key54
 
 [![Latest release](https://img.shields.io/github/v/release/grokcodile/key54?sort=semver&label=release)](https://github.com/grokcodile/key54/releases/latest)
@@ -5,8 +7,6 @@
 [![Downloads](https://img.shields.io/github/downloads/grokcodile/key54/total)](https://github.com/grokcodile/key54/releases)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/grokcodile/key54)](LICENSE)
-
-<img src="docs/icon.png" alt="Key54 Icon" width="96"/>
 
 **Key54** is a tiny macOS utility that binds one app of your choice to the right Command key (keycode 54). Hold the right ⌘ to summon that app; hold it again to switch back to what you were doing. A built-in hold delay keeps quick taps and your normal right-⌘ shortcuts working as usual.
 
