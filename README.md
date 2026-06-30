@@ -133,7 +133,7 @@ set them before any public release:
 
 ## How it works
 
-Key54 installs a `CGEventTap` that watches `flagsChanged` events for the right Command key (keycode 54). A sustained hold past the configured duration toggles the chosen app via `NSWorkspace`; full-screen and window-state edge cases are handled with the Accessibility API.
+Key54 watches `flagsChanged` events for the right Command key (keycode 54) with a **listen-only** session `CGEventTap`, serviced on a dedicated thread. Listen-only means the tap only ever *observes* events — the system never waits on it, so it can't block, delay, or drop input (even if Accessibility is revoked while running). A session-level tap also keeps seeing keys during Space switches and full-screen transitions, so the trigger fires reliably no matter which app or Space is up. A sustained hold past the configured duration toggles the chosen app via `NSWorkspace`; full-screen and window-state edge cases are handled with the Accessibility API.
 
 ## The name
 
