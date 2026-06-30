@@ -303,6 +303,94 @@
                 color: var(--dim);
                 margin-top: 14px;
             }
+            /* Two ways to install, side by side: the primary download button and
+               a copy-paste Homebrew command. */
+            .hero-cta {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: center;
+                gap: 14px;
+            }
+            .cta-or {
+                color: var(--dim);
+                font-size: 14px;
+            }
+            .brew {
+                display: inline-flex;
+                align-items: stretch;
+                height: 53px;
+                max-width: 100%;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: 13px;
+                overflow: hidden;
+            }
+            .brew code {
+                display: flex;
+                align-items: center;
+                min-width: 0;
+                overflow-x: auto;
+                padding: 0 14px;
+                font-family: ui-monospace, "SF Mono", Menlo, monospace;
+                font-size: 14px;
+                color: var(--text);
+                white-space: nowrap;
+                scrollbar-width: none;
+            }
+            .brew code::-webkit-scrollbar {
+                display: none;
+            }
+            .brew-prompt {
+                color: var(--dim);
+                margin-right: 8px;
+                user-select: none;
+            }
+            .brew-copy {
+                flex: none;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 48px;
+                padding: 0;
+                border: none;
+                border-left: 1px solid var(--border);
+                background: var(--surface);
+                color: var(--muted);
+                cursor: pointer;
+                transition:
+                    background 0.12s ease,
+                    color 0.12s ease;
+            }
+            .brew-copy:hover {
+                background: #fff;
+                color: var(--accent);
+            }
+            .brew-copy svg {
+                width: 17px;
+                height: 17px;
+            }
+            .brew-copy .ic-check {
+                display: none;
+                color: #1a9e54;
+            }
+            .brew-copy.copied {
+                color: #1a9e54;
+            }
+            .brew-copy.copied .ic-copy {
+                display: none;
+            }
+            .brew-copy.copied .ic-check {
+                display: block;
+            }
+            @media (max-width: 560px) {
+                .hero-cta {
+                    flex-direction: column;
+                }
+                .brew {
+                    width: 100%;
+                }
+            }
 
             /* ---------- Desktop + keyboard demo ---------- */
             .demo {
@@ -1429,24 +1517,65 @@
                 Hold the right-Command (⌘) key to summon the one app you reach
                 for constantly — hold it again to switch back.
             </p>
-            <a
-                class="dl"
-                href="https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
-            >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
+            <div class="hero-cta">
+                <a
+                    class="dl"
+                    href="https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
                 >
-                    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-                    <path d="M7 11l5 5 5-5" />
-                    <path d="M12 4v12" />
-                </svg>
-                Download for macOS
-            </a>
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                        <path d="M7 11l5 5 5-5" />
+                        <path d="M12 4v12" />
+                    </svg>
+                    Download for macOS
+                </a>
+                <span class="cta-or">or</span>
+                <div class="brew">
+                    <code
+                        ><span class="brew-prompt">$</span>brew install --cask
+                        grokcodile/tap/key54</code
+                    >
+                    <button
+                        class="brew-copy"
+                        type="button"
+                        data-copy="brew install --cask grokcodile/tap/key54"
+                        aria-label="Copy Homebrew install command"
+                    >
+                        <svg
+                            class="ic-copy"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <rect x="9" y="9" width="11" height="11" rx="2" />
+                            <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                        </svg>
+                        <svg
+                            class="ic-check"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.4"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <path d="M4 12.5l5 5L20 6.5" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
             <div class="meta">
                 macOS 13+ · Apple Silicon · ~1&nbsp;MB · free &amp; open source
             </div>
@@ -2090,6 +2219,9 @@
                         href="https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
                         >Download</a
                     >
+                    <a href="https://github.com/grokcodile/homebrew-tap"
+                        >Homebrew</a
+                    >
                     <a href="https://github.com/grokcodile/key54">GitHub repo</a>
                     <a href="https://github.com/grokcodile/key54#readme"
                         >Read the docs</a
@@ -2413,6 +2545,59 @@
                         window.open(url, "_blank", "noopener");
                     });
                 }
+            })();
+        </script>
+        <script>
+            // Copy-to-clipboard for the Homebrew install command (and any future
+            // [data-copy] button): copies, then flips the icon to a check for a beat.
+            (function () {
+                function fallbackCopy(text) {
+                    var ta = document.createElement("textarea");
+                    ta.value = text;
+                    ta.setAttribute("readonly", "");
+                    ta.style.position = "absolute";
+                    ta.style.left = "-9999px";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                        document.execCommand("copy");
+                    } catch (e) {}
+                    document.body.removeChild(ta);
+                }
+                document
+                    .querySelectorAll(".brew-copy[data-copy]")
+                    .forEach(function (btn) {
+                        var label =
+                            btn.getAttribute("aria-label") || "Copy command";
+                        var timer;
+                        btn.addEventListener("click", function () {
+                            var text = btn.getAttribute("data-copy");
+                            var flash = function () {
+                                btn.classList.add("copied");
+                                btn.setAttribute("aria-label", "Copied");
+                                clearTimeout(timer);
+                                timer = setTimeout(function () {
+                                    btn.classList.remove("copied");
+                                    btn.setAttribute("aria-label", label);
+                                }, 1600);
+                            };
+                            if (
+                                navigator.clipboard &&
+                                navigator.clipboard.writeText
+                            ) {
+                                navigator.clipboard
+                                    .writeText(text)
+                                    .then(flash)
+                                    .catch(function () {
+                                        fallbackCopy(text);
+                                        flash();
+                                    });
+                            } else {
+                                fallbackCopy(text);
+                                flash();
+                            }
+                        });
+                    });
             })();
         </script>
     </body>
