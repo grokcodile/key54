@@ -120,12 +120,13 @@
                 cursor: pointer;
                 transition: color 0.12s ease;
             }
-            .navmenubtn:hover {
+            .navmenubtn:hover,
+            .navmenubtn[aria-expanded="true"] {
                 color: var(--accent);
             }
             .navmenubtn svg {
-                width: 19px;
-                height: 19px;
+                width: 18px;
+                height: 18px;
             }
             .navgh {
                 display: inline-flex;
@@ -145,20 +146,36 @@
             }
             .navmenu {
                 position: relative;
+                display: flex;
+                align-items: center;
             }
             .menupop {
                 position: absolute;
                 right: 0;
-                top: calc(100% + 8px);
+                top: calc(100% + 9px);
                 min-width: 164px;
                 background: var(--surface);
                 border: 1px solid var(--border);
                 border-radius: 12px;
-                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+                box-shadow: 0 10px 26px rgba(0, 0, 0, 0.13);
                 padding: 6px;
                 display: flex;
                 flex-direction: column;
                 gap: 2px;
+            }
+            /* Caret bridging the menu to the button it opened from. */
+            .menupop::before {
+                content: "";
+                position: absolute;
+                top: -6px;
+                right: 18px;
+                width: 11px;
+                height: 11px;
+                background: var(--surface);
+                border-left: 1px solid var(--border);
+                border-top: 1px solid var(--border);
+                border-radius: 3px 0 0 0;
+                transform: rotate(45deg);
             }
             .menupop[hidden] {
                 display: none;
