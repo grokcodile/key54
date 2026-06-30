@@ -2,6 +2,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/grokcodile/key54?sort=semver&label=release)](https://github.com/grokcodile/key54/releases/latest)
 [![Homebrew](https://img.shields.io/badge/Homebrew-grokcodile%2Ftap-C9782E?logo=homebrew&logoColor=white)](https://github.com/grokcodile/homebrew-tap)
+[![Downloads](https://img.shields.io/github/downloads/grokcodile/key54/total)](https://github.com/grokcodile/key54/releases)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/grokcodile/key54)](LICENSE)
 
