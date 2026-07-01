@@ -160,12 +160,13 @@
                 flex-direction: column;
                 gap: 2px;
             }
-            /* Caret bridging the menu to the button it opened from. */
+            /* Caret bridging the menu to the button it opened from, centered under
+               the button (its right edge aligns with the menu's). */
             .menupop::before {
                 content: "";
                 position: absolute;
                 top: -6px;
-                right: 18px;
+                right: 40px;
                 width: 11px;
                 height: 11px;
                 background: var(--surface);
@@ -1452,10 +1453,9 @@
                 .navmenubtn span {
                     display: none;
                 }
-                /* Icon-only button sits in the menu's rounded corner, leaving no
-                   clean spot for the caret — drop it on mobile. */
+                /* Narrower icon-only pill → recenter the caret under it. */
                 .menupop::before {
-                    display: none;
+                    right: 18px;
                 }
                 .links {
                     gap: 10px;
