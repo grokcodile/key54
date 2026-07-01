@@ -592,22 +592,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// `brew upgrade --cask key54` (brew auto-refreshes the tap first). A plain app
     /// cask doesn't quit the running app, so waiting on it here is safe.
     private static func runBrewUpgrade(brew: String) -> Bool {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: brew)
-        proc.arguments = ["upgrade", "--cask", "key54"]
-        var env = ProcessInfo.processInfo.environment
         let brewBin = (brew as NSString).deletingLastPathComponent
+        var env = ProcessInfo.processInfo.environment
         env["PATH"] = "\(brewBin):/usr/bin:/bin:/usr/sbin:/sbin"
-        proc.environment = env
-        proc.standardOutput = FileHandle.nullDevice
-        proc.standardError = FileHandle.nullDevice
-        do {
-            try proc.run()
-            proc.waitUntilExit()
-            return proc.terminationStatus == 0
-        } catch {
-            return false
+
+        func run(_ args: [String]) -> Int32 {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: brew)
+            p.arguments = args
+            p.environment = env
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError = FileHandle.nullDevice
+            do { try p.run(); p.waitUntilExit(); return p.terminationStatus }
+            catch { return -1 }
         }
+
+        // Refresh the tap first: brew's own auto-update is throttled to ~daily, so a
+        // bare `brew upgrade` usually sees a stale cask and no-ops.
+        _ = run(["update"])
+        return run(["upgrade", "--cask", "key54"]) == 0
     }
 
     /// Launch a fresh copy (its bundle is now the new build on disk) and exit. The
