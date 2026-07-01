@@ -829,6 +829,9 @@ class SettingsWindow: NSWindow {
         let showWarning = !hasPermission                 // permission notice replaces switch + controls
         let showControls = switchOn                      // app picker / timing / animation
         let showsCustom = showControls && appDelegate?.selectedPreset == 4
+        // The dark footer strip only exists when there's an update to announce;
+        // otherwise it isn't shown at all.
+        let showFooter = (appDelegate?.updateState ?? .upToDate) != .upToDate
         let innerW = contentW - pad * 2
 
         // Description under the switch (shown only once permission is granted):
@@ -936,7 +939,7 @@ class SettingsWindow: NSWindow {
                         + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
         let totalH = topMargin + titleH + switchBlock + warningBlock
                    + (showControls ? enabledBody : 0)
-                   + sectionGap + bottomBarH + Self.footerH
+                   + sectionGap + bottomBarH + (showFooter ? Self.footerH : 0)
 
         setContentSize(NSSize(width: contentW, height: totalH))
 
@@ -1167,7 +1170,8 @@ class SettingsWindow: NSWindow {
         // centered Quit. Quit ends the process — it still returns at the next login
         // unless the switch above is off (which unregisters the login item). The
         // x positions match the centered 320-pt content column (app box / slider).
-        let btnW: CGFloat = 100, btnH: CGFloat = 32, barY: CGFloat = Self.footerH + 20
+        let btnW: CGFloat = 100, btnH: CGFloat = 32
+        let barY: CGFloat = (showFooter ? Self.footerH : 0) + 20
         let sidePad: CGFloat = 70
 
         if switchOn {
@@ -1206,29 +1210,31 @@ class SettingsWindow: NSWindow {
         tipBtn.toolTip = "Tip Jar"
         c.addSubview(tipBtn)
 
-        // Dark footer strip: the version, centered — replaced by the update status
-        // + button when a newer release is found. The window's rounded bottom
-        // corners clip its ends.
-        let footer = NSView(frame: NSRect(x: 0, y: 0, width: contentW, height: Self.footerH))
-        footer.wantsLayer = true
-        footer.layer?.backgroundColor = NSColor(calibratedWhite: 0.07, alpha: 1).cgColor
+        // Dark footer strip: only present when there's an update to announce. Shows
+        // the update status + an Update button, centered. The window's rounded
+        // bottom corners clip its ends.
+        if showFooter {
+            let footer = NSView(frame: NSRect(x: 0, y: 0, width: contentW, height: Self.footerH))
+            footer.wantsLayer = true
+            footer.layer?.backgroundColor = NSColor(calibratedWhite: 0.07, alpha: 1).cgColor
 
-        let status = NSTextField(labelWithString: "")
-        status.font = .systemFont(ofSize: 10.5)
-        status.textColor = NSColor(white: 1, alpha: 0.6)
-        footer.addSubview(status)
-        footerStatus = status
+            let status = NSTextField(labelWithString: "")
+            status.font = .systemFont(ofSize: 10.5)
+            status.textColor = NSColor(white: 1, alpha: 0.72)
+            footer.addSubview(status)
+            footerStatus = status
 
-        let updBtn = NSButton(title: "Update", target: appDelegate,
-                              action: #selector(AppDelegate.downloadUpdate))
-        updBtn.bezelStyle = .rounded
-        updBtn.controlSize = .small
-        updBtn.font = .systemFont(ofSize: 11)
-        footer.addSubview(updBtn)
-        footerButton = updBtn
+            let updBtn = NSButton(title: "Update", target: appDelegate,
+                                  action: #selector(AppDelegate.downloadUpdate))
+            updBtn.bezelStyle = .rounded
+            updBtn.controlSize = .small
+            updBtn.font = .systemFont(ofSize: 11)
+            footer.addSubview(updBtn)
+            footerButton = updBtn
 
-        c.addSubview(footer)
-        layoutFooter()
+            c.addSubview(footer)
+            layoutFooter()
+        }
 
         contentView = c
         updateAppDisplay()
@@ -1236,19 +1242,18 @@ class SettingsWindow: NSWindow {
 
     @objc func refreshAxBanner() { rebuild(); center() }
 
-    /// Update just the footer's status text + Update button from the current
-    /// update state — no full rebuild, so the window doesn't resize/recenter.
-    func refreshFooter() { layoutFooter() }
+    /// The footer only exists while an update is pending, so its appearance changes
+    /// the window height — rebuild (and recenter) to add or remove it cleanly.
+    func refreshFooter() { rebuild(); center() }
 
     private func layoutFooter() {
         guard let status = footerStatus, let btn = footerButton else { return }
         let state = appDelegate?.updateState ?? .upToDate
         let latest = appDelegate?.latestVersion
-        let current = appDelegate?.appVersion ?? "?"
         var showButton = false
         switch state {
         case .upToDate:
-            status.stringValue = "v\(current)"
+            status.stringValue = ""
         case .available, .failed:
             status.stringValue = latest.map { "Update available — v\($0)" } ?? "Update available"
             showButton = true
