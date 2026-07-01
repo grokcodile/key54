@@ -8,6 +8,7 @@ import Carbon
 enum UpdateState {
     case upToDate      // running the latest release
     case available     // a newer release exists (DMG install → manual Update button)
+    case downloading   // DMG: fetching the disk image before opening it and quitting
     case updating      // a Homebrew upgrade is running
     case updated       // Homebrew upgrade finished (relaunched, or restart to apply)
     case failed        // Homebrew upgrade failed — offer the manual download instead
@@ -625,9 +626,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: DMG assisted update
 
-    /// Open the latest DMG so the user can drag the new build across.
+    /// Download the latest DMG, open (mount) it, then quit — so the user can drag
+    /// the new build straight over this one without the "app is in use" block.
     @objc func downloadUpdate() {
-        if let url = URL(string: dmgURL) { NSWorkspace.shared.open(url) }
+        guard let url = URL(string: dmgURL) else { return }
+        updateState = .downloading
+        settingsWindow?.refreshFooter()
+        let dest = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Downloads/Key54.dmg")
+        URLSession.shared.downloadTask(with: url) { [weak self] tmp, _, err in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard let tmp, err == nil else {
+                    // Couldn't download — hand the URL to the browser and stay open.
+                    NSWorkspace.shared.open(url)
+                    self.updateState = .available
+                    self.settingsWindow?.refreshFooter()
+                    return
+                }
+                try? FileManager.default.removeItem(at: dest)
+                try? FileManager.default.moveItem(at: tmp, to: dest)
+                NSWorkspace.shared.open(dest)   // mount it → Finder shows the drag window
+                // Quit once the mount request is out, so nothing holds the old app.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    NSApp.terminate(nil)
+                }
+            }
+        }.resume()
     }
 }
 
@@ -1260,6 +1285,8 @@ class SettingsWindow: NSWindow {
         case .available, .failed:
             status.stringValue = latest.map { "Update available — v\($0)" } ?? "Update available"
             showButton = true
+        case .downloading:
+            status.stringValue = "Downloading update…"
         case .updating:
             status.stringValue = latest.map { "Updating to v\($0)…" } ?? "Updating…"
         case .updated:
