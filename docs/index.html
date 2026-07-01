@@ -1451,10 +1451,10 @@
                 .navmenubtn span {
                     display: none;
                 }
-                /* Label hidden → the button is icon-only, so re-center the caret
-                   under the hamburger glyph instead of the (now gone) label. */
+                /* Icon-only button sits in the menu's rounded corner, leaving no
+                   clean spot for the caret — drop it on mobile. */
                 .menupop::before {
-                    right: 4px;
+                    display: none;
                 }
                 .links {
                     gap: 10px;
