@@ -106,19 +106,20 @@
                 display: inline-flex;
                 align-items: center;
                 gap: 7px;
-                background: none;
+                background: var(--text);
                 border: 0;
-                padding: 0;
+                padding: 8px 14px;
+                border-radius: 9px;
                 font: inherit;
                 font-size: 14px;
-                font-weight: 500;
-                color: var(--text);
+                font-weight: 600;
+                color: #fff;
                 cursor: pointer;
-                transition: color 0.12s ease;
+                transition: background 0.12s ease;
             }
             .navmenubtn:hover,
             .navmenubtn[aria-expanded="true"] {
-                color: var(--accent);
+                background: #333;
             }
             .navmenubtn svg {
                 width: 18px;
