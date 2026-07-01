@@ -1451,6 +1451,11 @@
                 .navmenubtn span {
                     display: none;
                 }
+                /* Label hidden → the button is icon-only, so re-center the caret
+                   under the hamburger glyph instead of the (now gone) label. */
+                .menupop::before {
+                    right: 4px;
+                }
                 .links {
                     gap: 10px;
                 }
@@ -1502,7 +1507,7 @@
                             <span>Menu</span>
                         </button>
                         <div class="menupop" id="menupop" hidden>
-                            <a href="#top">Download</a>
+                            <a href="#top">Home</a>
                             <a href="#demo">Demo</a>
                             <a href="#features">Features</a>
                             <a href="#examples">Examples</a>
