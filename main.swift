@@ -9,9 +9,8 @@ enum UpdateState {
     case upToDate      // running the latest release
     case available     // a newer release exists (DMG install → manual Update button)
     case downloading   // DMG: fetching the disk image before opening it and quitting
-    case updating      // a Homebrew upgrade is running
-    case updated       // Homebrew upgrade finished (relaunched, or restart to apply)
-    case failed        // Homebrew upgrade failed — offer the manual download instead
+    case updating      // a Homebrew upgrade is running (helper quits + relaunches us)
+    case failed        // Homebrew upgrade couldn't start — offer the manual download
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -566,62 +565,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         didAttemptAutoUpdate = true
         updateState = .updating
         settingsWindow?.refreshFooter()
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let ok = AppDelegate.runBrewUpgrade(brew: brew)
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if ok {
-                    self.updateState = .updated
-                    self.settingsWindow?.refreshFooter()
-                    // Don't yank the window out from under an active edit; a
-                    // background instance relaunches to apply the new build.
-                    if !(self.settingsWindow?.isVisible ?? false) { self.relaunchSilently() }
-                } else {
-                    self.updateState = .failed
-                    self.settingsWindow?.refreshFooter()
-                }
-            }
+
+        // Run the upgrade from a DETACHED helper, not in-process: `brew upgrade
+        // --cask` force-quits the app it's replacing — which would be us — and kills
+        // the upgrade mid-flight. The helper waits for Key54 to quit, refreshes the
+        // tap (brew's own refresh is throttled ~daily), upgrades, and relaunches.
+        // It's orphaned to launchd when we terminate, so it survives to finish.
+        let brewBin = (brew as NSString).deletingLastPathComponent
+        let bundle = Bundle.main.bundlePath
+        let script = """
+        #!/bin/sh
+        export PATH="\(brewBin):/usr/bin:/bin:/usr/sbin:/sbin"
+        for i in $(seq 1 40); do pgrep -x Key54 >/dev/null || break; sleep 0.5; done
+        "\(brew)" update >/dev/null 2>&1
+        "\(brew)" upgrade --cask key54 >/dev/null 2>&1
+        open -n "\(bundle)" --args --relaunched
+        """
+        let path = NSTemporaryDirectory() + "key54-update.sh"
+        do {
+            try script.write(toFile: path, atomically: true, encoding: .utf8)
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/sh")
+            p.arguments = [path]
+            try p.run()
+        } catch {
+            updateState = .failed
+            settingsWindow?.refreshFooter()
+            return
         }
+        // Quit so the helper can replace the app; a brief beat lets the footer show.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { NSApp.terminate(nil) }
     }
 
     private func brewPath() -> String? {
         for p in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
         where FileManager.default.isExecutableFile(atPath: p) { return p }
         return nil
-    }
-
-    /// `brew upgrade --cask key54` (brew auto-refreshes the tap first). A plain app
-    /// cask doesn't quit the running app, so waiting on it here is safe.
-    private static func runBrewUpgrade(brew: String) -> Bool {
-        let brewBin = (brew as NSString).deletingLastPathComponent
-        var env = ProcessInfo.processInfo.environment
-        env["PATH"] = "\(brewBin):/usr/bin:/bin:/usr/sbin:/sbin"
-
-        func run(_ args: [String]) -> Int32 {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: brew)
-            p.arguments = args
-            p.environment = env
-            p.standardOutput = FileHandle.nullDevice
-            p.standardError = FileHandle.nullDevice
-            do { try p.run(); p.waitUntilExit(); return p.terminationStatus }
-            catch { return -1 }
-        }
-
-        // Refresh the tap first: brew's own auto-update is throttled to ~daily, so a
-        // bare `brew upgrade` usually sees a stale cask and no-ops.
-        _ = run(["update"])
-        return run(["upgrade", "--cask", "key54"]) == 0
-    }
-
-    /// Launch a fresh copy (its bundle is now the new build on disk) and exit. The
-    /// `--relaunched` flag keeps the new instance from popping the settings window.
-    private func relaunchSilently() {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        proc.arguments = ["-n", Bundle.main.bundlePath, "--args", "--relaunched"]
-        try? proc.run()
-        NSApp.terminate(nil)
     }
 
     // MARK: DMG assisted update
@@ -1289,8 +1268,6 @@ class SettingsWindow: NSWindow {
             status.stringValue = "Downloading update…"
         case .updating:
             status.stringValue = latest.map { "Updating to v\($0)…" } ?? "Updating…"
-        case .updated:
-            status.stringValue = latest.map { "Updated to v\($0) — restart to apply" } ?? "Updated"
         }
         btn.isHidden = !showButton
         status.sizeToFit()
