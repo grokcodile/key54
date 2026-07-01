@@ -4,6 +4,15 @@ import Carbon
 
 // MARK: - App Delegate
 
+/// Where the settings footer's update indicator is in its lifecycle.
+enum UpdateState {
+    case upToDate      // running the latest release
+    case available     // a newer release exists (DMG install → manual Update button)
+    case updating      // a Homebrew upgrade is running
+    case updated       // Homebrew upgrade finished (relaunched, or restart to apply)
+    case failed        // Homebrew upgrade failed — offer the manual download instead
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     // LISTEN-ONLY session event tap (.listenOnly) serviced on a dedicated thread.
     // Unlike an active tap it's passive — the system ignores its return value and
@@ -48,6 +57,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "appEnabled") }
     }
 
+    // MARK: Update state (see the Updates section below)
+    /// Marketing version, stamped from the release tag by CI.
+    var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+    }
+    private(set) var updateState: UpdateState = .upToDate
+    /// Newest release (no leading "v") when it's newer than ours, else nil.
+    private(set) var latestVersion: String?
+    private var didAttemptAutoUpdate = false       // one Homebrew upgrade per launch
+    private var updateTimer: Timer?
+    let dmgURL = "https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
+    /// Installed via the Homebrew cask? Its metadata lives in the Caskroom.
+    lazy var isHomebrewManaged: Bool = {
+        let fm = FileManager.default
+        return fm.fileExists(atPath: "/opt/homebrew/Caskroom/key54")
+            || fm.fileExists(atPath: "/usr/local/Caskroom/key54")
+    }()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
@@ -78,9 +105,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // A user-initiated launch (Finder / Spotlight / Launchpad / Dock / `open`)
         // opens straight to settings. A login auto-launch by launchd stays silent
         // in the background. `applicationShouldHandleReopen` covers the case where
-        // the app is already running and the user opens it again.
-        if !launchedAsLoginItem {
+        // the app is already running and the user opens it again. A silent
+        // post-update relaunch (--relaunched) also stays in the background.
+        let relaunched = ProcessInfo.processInfo.arguments.contains("--relaunched")
+        if !launchedAsLoginItem && !relaunched {
             showSettings()
+        }
+
+        // Look for a newer release now, then daily (the check itself is throttled,
+        // so a long-running background instance still updates).
+        checkForUpdate()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
+            self?.checkForUpdate()
         }
     }
 
@@ -118,6 +154,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.updateAppDisplay()
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+        checkForUpdate()   // refresh the footer's update status (throttled)
     }
 
     // MARK: - App tracking
@@ -464,6 +501,131 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // user had to leave Key54 for System Settings and come back. The
     // com.apple.accessibility.api notification often misses, so this backs it up.
     func applicationDidBecomeActive(_ notification: Notification) { syncAccessibility() }
+
+    // MARK: - Updates
+
+    /// Ask GitHub for the latest release, at most once a day. On a newer version,
+    /// Homebrew installs upgrade silently; DMG installs surface an Update button.
+    func checkForUpdate(force: Bool = false) {
+        let now = Date().timeIntervalSince1970
+        let last = UserDefaults.standard.double(forKey: "lastUpdateCheck")
+        if !force && now - last < 86_400 { return }
+        UserDefaults.standard.set(now, forKey: "lastUpdateCheck")
+
+        guard let url = URL(string: "https://api.github.com/repos/grokcodile/key54/releases/latest")
+        else { return }
+        var req = URLRequest(url: url)
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = 10
+        URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
+            guard let self, let data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tag = json["tag_name"] as? String else { return }
+            let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+            DispatchQueue.main.async { self.handleLatest(latest) }
+        }.resume()
+    }
+
+    private func handleLatest(_ latest: String) {
+        guard AppDelegate.isVersion(latest, newerThan: appVersion) else {
+            latestVersion = nil
+            updateState = .upToDate
+            settingsWindow?.refreshFooter()
+            return
+        }
+        latestVersion = latest
+        if isHomebrewManaged {
+            startHomebrewUpdate()
+        } else {
+            updateState = .available
+            settingsWindow?.refreshFooter()
+        }
+    }
+
+    /// Numeric, component-wise compare so "1.26" > "1.9" > "1.17".
+    static func isVersion(_ a: String, newerThan b: String) -> Bool {
+        let pa = a.split(separator: ".").map { Int($0) ?? 0 }
+        let pb = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(pa.count, pb.count) {
+            let x = i < pa.count ? pa[i] : 0
+            let y = i < pb.count ? pb[i] : 0
+            if x != y { return x > y }
+        }
+        return false
+    }
+
+    // MARK: Homebrew silent update
+
+    private func startHomebrewUpdate() {
+        guard !didAttemptAutoUpdate, let brew = brewPath() else {
+            updateState = .available          // can't run brew — offer the manual path
+            settingsWindow?.refreshFooter()
+            return
+        }
+        didAttemptAutoUpdate = true
+        updateState = .updating
+        settingsWindow?.refreshFooter()
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let ok = AppDelegate.runBrewUpgrade(brew: brew)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if ok {
+                    self.updateState = .updated
+                    self.settingsWindow?.refreshFooter()
+                    // Don't yank the window out from under an active edit; a
+                    // background instance relaunches to apply the new build.
+                    if !(self.settingsWindow?.isVisible ?? false) { self.relaunchSilently() }
+                } else {
+                    self.updateState = .failed
+                    self.settingsWindow?.refreshFooter()
+                }
+            }
+        }
+    }
+
+    private func brewPath() -> String? {
+        for p in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+        where FileManager.default.isExecutableFile(atPath: p) { return p }
+        return nil
+    }
+
+    /// `brew upgrade --cask key54` (brew auto-refreshes the tap first). A plain app
+    /// cask doesn't quit the running app, so waiting on it here is safe.
+    private static func runBrewUpgrade(brew: String) -> Bool {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: brew)
+        proc.arguments = ["upgrade", "--cask", "key54"]
+        var env = ProcessInfo.processInfo.environment
+        let brewBin = (brew as NSString).deletingLastPathComponent
+        env["PATH"] = "\(brewBin):/usr/bin:/bin:/usr/sbin:/sbin"
+        proc.environment = env
+        proc.standardOutput = FileHandle.nullDevice
+        proc.standardError = FileHandle.nullDevice
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            return proc.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    /// Launch a fresh copy (its bundle is now the new build on disk) and exit. The
+    /// `--relaunched` flag keeps the new instance from popping the settings window.
+    private func relaunchSilently() {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        proc.arguments = ["-n", Bundle.main.bundlePath, "--args", "--relaunched"]
+        try? proc.run()
+        NSApp.terminate(nil)
+    }
+
+    // MARK: DMG assisted update
+
+    /// Open the latest DMG so the user can drag the new build across.
+    @objc func downloadUpdate() {
+        if let url = URL(string: dmgURL) { NSWorkspace.shared.open(url) }
+    }
 }
 
 // MARK: - Settings Window
@@ -612,6 +774,9 @@ class SettingsWindow: NSWindow {
     private var stylePills: [StylePill] = []   // the two Animation Style buttons
     private let contentW: CGFloat = 460
     private let pad: CGFloat = 32
+    static let footerH: CGFloat = 26                 // dark version/update strip
+    private weak var footerStatus: NSTextField?
+    private weak var footerButton: NSButton?
 
     // Hold-duration presets. Each stop has its own dead-zone buffer and charge
     // sweep (how long the ring fills); the dissolve and swell are constant. The
@@ -771,7 +936,7 @@ class SettingsWindow: NSWindow {
                         + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
         let totalH = topMargin + titleH + switchBlock + warningBlock
                    + (showControls ? enabledBody : 0)
-                   + sectionGap + bottomBarH
+                   + sectionGap + bottomBarH + Self.footerH
 
         setContentSize(NSSize(width: contentW, height: totalH))
 
@@ -1002,7 +1167,7 @@ class SettingsWindow: NSWindow {
         // centered Quit. Quit ends the process — it still returns at the next login
         // unless the switch above is off (which unregisters the login item). The
         // x positions match the centered 320-pt content column (app box / slider).
-        let btnW: CGFloat = 100, btnH: CGFloat = 32, barY: CGFloat = 20
+        let btnW: CGFloat = 100, btnH: CGFloat = 32, barY: CGFloat = Self.footerH + 20
         let sidePad: CGFloat = 70
 
         if switchOn {
@@ -1041,11 +1206,76 @@ class SettingsWindow: NSWindow {
         tipBtn.toolTip = "Tip Jar"
         c.addSubview(tipBtn)
 
+        // Dark footer strip: the version, centered — replaced by the update status
+        // + button when a newer release is found. The window's rounded bottom
+        // corners clip its ends.
+        let footer = NSView(frame: NSRect(x: 0, y: 0, width: contentW, height: Self.footerH))
+        footer.wantsLayer = true
+        footer.layer?.backgroundColor = NSColor(calibratedWhite: 0.07, alpha: 1).cgColor
+
+        let status = NSTextField(labelWithString: "")
+        status.font = .systemFont(ofSize: 10.5)
+        status.textColor = NSColor(white: 1, alpha: 0.6)
+        footer.addSubview(status)
+        footerStatus = status
+
+        let updBtn = NSButton(title: "Update", target: appDelegate,
+                              action: #selector(AppDelegate.downloadUpdate))
+        updBtn.bezelStyle = .rounded
+        updBtn.controlSize = .small
+        updBtn.font = .systemFont(ofSize: 11)
+        footer.addSubview(updBtn)
+        footerButton = updBtn
+
+        c.addSubview(footer)
+        layoutFooter()
+
         contentView = c
         updateAppDisplay()
     }
 
     @objc func refreshAxBanner() { rebuild(); center() }
+
+    /// Update just the footer's status text + Update button from the current
+    /// update state — no full rebuild, so the window doesn't resize/recenter.
+    func refreshFooter() { layoutFooter() }
+
+    private func layoutFooter() {
+        guard let status = footerStatus, let btn = footerButton else { return }
+        let state = appDelegate?.updateState ?? .upToDate
+        let latest = appDelegate?.latestVersion
+        let current = appDelegate?.appVersion ?? "?"
+        var showButton = false
+        switch state {
+        case .upToDate:
+            status.stringValue = "v\(current)"
+        case .available, .failed:
+            status.stringValue = latest.map { "Update available — v\($0)" } ?? "Update available"
+            showButton = true
+        case .updating:
+            status.stringValue = latest.map { "Updating to v\($0)…" } ?? "Updating…"
+        case .updated:
+            status.stringValue = latest.map { "Updated to v\($0) — restart to apply" } ?? "Updated"
+        }
+        btn.isHidden = !showButton
+        status.sizeToFit()
+
+        // Center the content: [status] (+ [Update]) as one group.
+        let gap: CGFloat = 8
+        var btnW: CGFloat = 0
+        if showButton { btn.sizeToFit(); btnW = max(btn.frame.width, 62) }
+        let total = status.frame.width + (showButton ? gap + btnW : 0)
+        var x = ((contentW - total) / 2).rounded()
+        status.frame.origin = NSPoint(x: x, y: (Self.footerH - status.frame.height) / 2)
+        x += status.frame.width
+        if showButton {
+            x += gap
+            var bf = btn.frame
+            bf.size.width = btnW
+            bf.origin = NSPoint(x: x, y: (Self.footerH - bf.height) / 2)
+            btn.frame = bf
+        }
+    }
 
     func updateAppDisplay() {
         guard let appDelegate else { return }
