@@ -65,7 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var updateState: UpdateState = .upToDate
     /// Newest release (no leading "v") when it's newer than ours, else nil.
     private(set) var latestVersion: String?
-    private var didAttemptAutoUpdate = false       // one Homebrew upgrade per launch
+    private var updateStarting = false             // guards against a double Update click
     private var updateTimer: Timer?
     let dmgURL = "https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
     /// Installed via the Homebrew cask? Its metadata lives in the Caskroom.
@@ -505,7 +505,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Updates
 
     /// Ask GitHub for the latest release, at most once a day. On a newer version,
-    /// Homebrew installs upgrade silently; DMG installs surface an Update button.
+    /// the settings footer surfaces an Update button (it doesn't update on its own).
     func checkForUpdate(force: Bool = false) {
         let now = Date().timeIntervalSince1970
         let last = UserDefaults.standard.double(forKey: "lastUpdateCheck")
@@ -534,12 +534,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         latestVersion = latest
-        if isHomebrewManaged {
-            startHomebrewUpdate()
-        } else {
-            updateState = .available
-            settingsWindow?.refreshFooter()
-        }
+        updateState = .available     // surface the footer's Update button; don't auto-run
+        settingsWindow?.refreshFooter()
+    }
+
+    /// The footer's Update button. Runs the right update for how Key54 was
+    /// installed: the Homebrew helper, or the DMG download.
+    @objc func performUpdate() {
+        if isHomebrewManaged { startHomebrewUpdate() } else { downloadUpdate() }
     }
 
     /// Numeric, component-wise compare so "1.26" > "1.9" > "1.17".
@@ -554,15 +556,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
-    // MARK: Homebrew silent update
+    // MARK: Homebrew update (user-triggered from the footer button)
 
     private func startHomebrewUpdate() {
-        guard !didAttemptAutoUpdate, let brew = brewPath() else {
+        guard !updateStarting, let brew = brewPath() else {
             updateState = .available          // can't run brew — offer the manual path
             settingsWindow?.refreshFooter()
             return
         }
-        didAttemptAutoUpdate = true
+        updateStarting = true
         updateState = .updating
         settingsWindow?.refreshFooter()
 
@@ -589,6 +591,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             p.arguments = [path]
             try p.run()
         } catch {
+            updateStarting = false            // let the user try again
             updateState = .failed
             settingsWindow?.refreshFooter()
             return
@@ -1232,7 +1235,7 @@ class SettingsWindow: NSWindow {
             footerStatus = status
 
             let updBtn = NSButton(title: "Update", target: appDelegate,
-                                  action: #selector(AppDelegate.downloadUpdate))
+                                  action: #selector(AppDelegate.performUpdate))
             updBtn.bezelStyle = .rounded
             updBtn.controlSize = .small
             updBtn.font = .systemFont(ofSize: 11)
