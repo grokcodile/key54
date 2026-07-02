@@ -49,7 +49,7 @@ The released build is signed with a Developer ID and notarized by Apple, so it o
 
 ### Updates
 
-Key54 checks for new releases once a day. When one is available, the settings window shows a notice with an **Update** button: Homebrew installs upgrade through `brew` and relaunch automatically; DMG installs download and open the new disk image so you can drag it across.
+Key54 checks for new releases when it launches, periodically while running, and every time you open its settings — so the window always shows current status. When an update is available, a notice appears with an **Update** button: Homebrew installs upgrade through `brew` and reopen on the new version by themselves; DMG installs download and open the new disk image so you can drag it across.
 
 ### Build from source
 
