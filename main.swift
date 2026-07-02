@@ -99,10 +99,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // A user-initiated launch (Finder / Spotlight / Launchpad / Dock / `open`)
         // opens straight to settings. A login auto-launch by launchd stays silent
         // in the background. `applicationShouldHandleReopen` covers the case where
-        // the app is already running and the user opens it again. A silent
-        // post-update relaunch (--relaunched) also stays in the background.
-        let relaunched = ProcessInfo.processInfo.arguments.contains("--relaunched")
-        if !launchedAsLoginItem && !relaunched {
+        // the app is already running and the user opens it again. (The post-update
+        // relaunch counts as a user open — the update was clicked from the settings
+        // window, so it comes back showing the new version.)
+        if !launchedAsLoginItem {
             showSettings()
         }
 
@@ -557,20 +557,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateState = .updating
         settingsWindow?.refreshFooter()
 
-        // Run the upgrade from a DETACHED helper, not in-process: `brew upgrade
-        // --cask` force-quits the app it's replacing — which would be us — and kills
-        // the upgrade mid-flight. The helper waits for Key54 to quit, refreshes the
-        // tap (brew's own refresh is throttled ~daily), upgrades, and relaunches.
-        // It's orphaned to launchd when we terminate, so it survives to finish.
+        // Run the upgrade from a DETACHED helper, not in-process: brew quits the app
+        // it's replacing — which would be us — killing the upgrade mid-flight. The
+        // helper does the slow work (tap refresh + download) FIRST, while we're
+        // still alive showing "Updating…", then quits us, swaps in the pre-fetched
+        // build (a few seconds), and reopens the app. We never terminate ourselves:
+        // quitting early leaves a long "is it done?" gap that invites reopening the
+        // app mid-upgrade — brew then kills that instance and its window vanishes.
+        // The relaunch is unconditional, so even a failed upgrade brings the app
+        // back (and the footer just offers the update again).
         let brewBin = (brew as NSString).deletingLastPathComponent
         let bundle = Bundle.main.bundlePath
         let script = """
         #!/bin/sh
         export PATH="\(brewBin):/usr/bin:/bin:/usr/sbin:/sbin"
-        for i in $(seq 1 40); do pgrep -x Key54 >/dev/null || break; sleep 0.5; done
         "\(brew)" update >/dev/null 2>&1
+        "\(brew)" fetch --cask key54 >/dev/null 2>&1
+        pkill -x Key54 2>/dev/null
+        for i in $(seq 1 20); do pgrep -x Key54 >/dev/null || break; sleep 0.5; done
         "\(brew)" upgrade --cask key54 >/dev/null 2>&1
-        open -n "\(bundle)" --args --relaunched
+        open "\(bundle)"
         """
         let path = NSTemporaryDirectory() + "key54-update.sh"
         do {
@@ -583,10 +589,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             updateStarting = false            // let the user try again
             updateState = .failed
             settingsWindow?.refreshFooter()
-            return
         }
-        // Quit so the helper can replace the app; a brief beat lets the footer show.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { NSApp.terminate(nil) }
     }
 
     private func brewPath() -> String? {
