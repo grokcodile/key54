@@ -517,13 +517,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var req = URLRequest(url: url)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         req.timeoutInterval = 10
-        URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
-            guard let self, let data,
+        Task { [weak self] in
+            guard let (data, _) = try? await URLSession.shared.data(for: req),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tag = json["tag_name"] as? String else { return }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-            DispatchQueue.main.async { self.handleLatest(latest) }
-        }.resume()
+            guard let self else { return }
+            await MainActor.run { self.handleLatest(latest) }
+        }
     }
 
     private func handleLatest(_ latest: String) {
@@ -616,25 +617,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.refreshFooter()
         let dest = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Downloads/Key54.dmg")
-        URLSession.shared.downloadTask(with: url) { [weak self] tmp, _, err in
-            DispatchQueue.main.async {
+        Task { [weak self] in
+            do {
+                let (tmp, _) = try await URLSession.shared.download(from: url)
+                // Claim the temp file here, in the same context — it isn't
+                // guaranteed to survive an actor hop.
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: tmp, to: dest)
+                await MainActor.run {
+                    NSWorkspace.shared.open(dest)   // mount it → Finder shows the drag window
+                    // Quit once the mount request is out, so nothing holds the old app.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        NSApp.terminate(nil)
+                    }
+                }
+            } catch {
+                // Couldn't download — hand the URL to the browser and stay open.
                 guard let self else { return }
-                guard let tmp, err == nil else {
-                    // Couldn't download — hand the URL to the browser and stay open.
+                await MainActor.run {
                     NSWorkspace.shared.open(url)
                     self.updateState = .available
                     self.settingsWindow?.refreshFooter()
-                    return
-                }
-                try? FileManager.default.removeItem(at: dest)
-                try? FileManager.default.moveItem(at: tmp, to: dest)
-                NSWorkspace.shared.open(dest)   // mount it → Finder shows the drag window
-                // Quit once the mount request is out, so nothing holds the old app.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    NSApp.terminate(nil)
                 }
             }
-        }.resume()
+        }
     }
 }
 
