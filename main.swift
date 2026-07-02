@@ -781,7 +781,7 @@ class SettingsWindow: NSWindow {
     private var stylePills: [StylePill] = []   // the two Animation Style buttons
     private let contentW: CGFloat = 460
     private let pad: CGFloat = 32
-    static let footerH: CGFloat = 26                 // dark version/update strip
+    static let footerH: CGFloat = 36                 // blue update-notice strip
     private weak var footerStatus: NSTextField?
     private weak var footerButton: NSButton?
 
@@ -1208,25 +1208,41 @@ class SettingsWindow: NSWindow {
         tipBtn.toolTip = "Tip Jar"
         c.addSubview(tipBtn)
 
-        // Dark footer strip: only present when there's an update to announce. Shows
-        // the update status + an Update button, centered. The window's rounded
-        // bottom corners clip its ends.
+        // Blue footer strip: only present when there's an update to announce. Shows
+        // the update status + an Update button, centered. The brand blue (the
+        // site's accent, #0071e3) makes the notice unmissable; the window's
+        // rounded bottom corners clip its ends.
         if showFooter {
+            let brandBlue = NSColor(srgbRed: 0 / 255, green: 113 / 255,
+                                    blue: 227 / 255, alpha: 1)   // key54.app accent
             let footer = NSView(frame: NSRect(x: 0, y: 0, width: contentW, height: Self.footerH))
             footer.wantsLayer = true
-            footer.layer?.backgroundColor = NSColor(calibratedWhite: 0.07, alpha: 1).cgColor
+            footer.layer?.backgroundColor = brandBlue.cgColor
 
             let status = NSTextField(labelWithString: "")
-            status.font = .systemFont(ofSize: 10.5)
-            status.textColor = NSColor(white: 1, alpha: 0.72)
+            status.font = .systemFont(ofSize: 11)
+            status.textColor = .white
             footer.addSubview(status)
             footerStatus = status
 
-            let updBtn = NSButton(title: "Update", target: appDelegate,
-                                  action: #selector(AppDelegate.performUpdate))
-            updBtn.bezelStyle = .rounded
-            updBtn.controlSize = .small
-            updBtn.font = .systemFont(ofSize: 11)
+            // White pill + blue label so the button reads against the blue bar
+            // (the site's inverted-button pattern). Drawn with our own layer, not
+            // a native bezel: AppKit washes bezels out whenever the window isn't
+            // key, which made the button nearly disappear. The slight transparency
+            // is deliberate — and constant across window states.
+            let updBtn = LinkButton(title: "Update", target: appDelegate,
+                                    action: #selector(AppDelegate.performUpdate))
+            updBtn.isBordered = false
+            updBtn.wantsLayer = true
+            updBtn.layer?.backgroundColor = NSColor(white: 1, alpha: 0.9).cgColor
+            updBtn.layer?.cornerRadius = 11   // full pill at the 22 pt height
+            let btnPara = NSMutableParagraphStyle()
+            btnPara.alignment = .center
+            updBtn.attributedTitle = NSAttributedString(string: "Update", attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+                .foregroundColor: brandBlue,
+                .paragraphStyle: btnPara,
+            ])
             footer.addSubview(updBtn)
             footerButton = updBtn
 
@@ -1263,20 +1279,20 @@ class SettingsWindow: NSWindow {
         btn.isHidden = !showButton
         status.sizeToFit()
 
-        // Center the content: [status] (+ [Update]) as one group.
+        // Center the content: [status] (+ [Update]) as one group. The button is
+        // borderless (custom pill), so give it explicit padding around the title.
         let gap: CGFloat = 8
+        let btnH: CGFloat = 22
         var btnW: CGFloat = 0
-        if showButton { btn.sizeToFit(); btnW = max(btn.frame.width, 62) }
+        if showButton { btn.sizeToFit(); btnW = max(btn.frame.width + 20, 62) }
         let total = status.frame.width + (showButton ? gap + btnW : 0)
         var x = ((contentW - total) / 2).rounded()
         status.frame.origin = NSPoint(x: x, y: (Self.footerH - status.frame.height) / 2)
         x += status.frame.width
         if showButton {
             x += gap
-            var bf = btn.frame
-            bf.size.width = btnW
-            bf.origin = NSPoint(x: x, y: (Self.footerH - bf.height) / 2)
-            btn.frame = bf
+            btn.frame = NSRect(x: x, y: ((Self.footerH - btnH) / 2).rounded(),
+                               width: btnW, height: btnH)
         }
     }
 
