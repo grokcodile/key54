@@ -13,7 +13,9 @@ bash build.sh
 
 echo "Installing to ${APP_DIR}..."
 killall "${APP_NAME}" 2>/dev/null || true
-rm -rf "${APP_DIR}"
+# sudo fallback mirrors the copy below — a prior sudo-installed copy is root-owned,
+# and without it the plain rm fails and set -e kills the script here.
+rm -rf "${APP_DIR}" 2>/dev/null || sudo rm -rf "${APP_DIR}"
 
 if ! cp -R "${BUILD_DIR}" "${APP_DIR}" 2>/dev/null; then
     echo "Need admin password to copy into /Applications:"

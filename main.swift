@@ -1,6 +1,5 @@
 import Cocoa
 import ServiceManagement
-import Carbon
 
 // MARK: - App Delegate
 
@@ -22,7 +21,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // so a right-⌘ press the instant after switching Spaces isn't dropped.
     private var tap: CFMachPort?
     private var tapSource: CFRunLoopSource?
-    private var tapThread: Thread?
     private var tapRunLoop: CFRunLoop?
     private var previousApp: NSRunningApplication?
     private var settingsWindow: SettingsWindow?
@@ -43,10 +41,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // True from the instant a charge commits to firing until the switch
     // completes — blocks a re-press in that window from starting a stray charge.
     private var firing = false
-    var showAnimation: Bool {
-        get { UserDefaults.standard.object(forKey: "showAnimation") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "showAnimation") }
-    }
 
     /// Master on/off. When enabled, Key54 listens for the right-⌘ trigger and
     /// starts at login. When disabled, it stops listening and unregisters the
@@ -112,8 +106,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             showSettings()
         }
 
-        // Look for a newer release now, then daily (the check itself is throttled,
-        // so a long-running background instance still updates).
+        // Look for a newer release now, then retry every 6 h — successful checks
+        // throttle themselves to one a day; failed ones (offline) retry sooner.
         checkForUpdate()
         updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
             self?.checkForUpdate()
@@ -403,7 +397,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         thread.name = "com.ethan.key54.eventtap"
         thread.start()
-        tapThread = thread
     }
 
     /// Dispose of the tap and its dedicated thread. Safe to call when there's no
@@ -419,7 +412,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.tap = nil
         self.tapSource = nil
         self.tapRunLoop = nil
-        self.tapThread = nil
     }
 
     func scheduleToggle() {
@@ -455,13 +447,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // during the hold (dismiss the target if it's frontmost, else summon it).
         let dismissing = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == resolvedBundleID()
 
-        if showAnimation {
-            let icon = dismissing
-                ? (previousApp?.icon ?? NSWorkspace.shared.icon(forFile: "/System/Library/CoreServices/Finder.app"))
-                : NSWorkspace.shared.icon(forFile: targetAppURL().path)
-            hudVisible = true
-            hud.begin(fill: charge, icon: icon)
-        }
+        let icon = dismissing
+            ? (previousApp?.icon ?? NSWorkspace.shared.icon(forFile: "/System/Library/CoreServices/Finder.app"))
+            : NSWorkspace.shared.icon(forFile: targetAppURL().path)
+        hudVisible = true
+        hud.begin(fill: charge, icon: icon)
 
         holdTimer = Timer.scheduledTimer(withTimeInterval: charge, repeats: false) { [weak self] _ in
             guard let self else { return }
@@ -510,7 +500,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let now = Date().timeIntervalSince1970
         let last = UserDefaults.standard.double(forKey: "lastUpdateCheck")
         if !force && now - last < 86_400 { return }
-        UserDefaults.standard.set(now, forKey: "lastUpdateCheck")
 
         guard let url = URL(string: "https://api.github.com/repos/grokcodile/key54/releases/latest")
         else { return }
@@ -523,7 +512,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   let tag = json["tag_name"] as? String else { return }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             guard let self else { return }
-            await MainActor.run { self.handleLatest(latest) }
+            await MainActor.run {
+                // Stamp the throttle only on a successful answer — a failed check
+                // (offline launch) shouldn't block detection for a day; the 6 h
+                // timer retries it.
+                UserDefaults.standard.set(now, forKey: "lastUpdateCheck")
+                self.handleLatest(latest)
+            }
         }
     }
 
@@ -822,17 +817,8 @@ class SettingsWindow: NSWindow {
         self.isRestorable = false
         rebuild()
         self.center()
-
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(refreshAxBanner),
-            name: NSNotification.Name("com.apple.accessibility.api"),
-            object: nil
-        )
-    }
-
-    deinit {
-        DistributedNotificationCenter.default().removeObserver(self)
+        // Permission changes reach us via the AppDelegate (its poll + notification
+        // observer call refreshAxBanner on a state flip) — no observer of our own.
     }
 
     // MARK: - Layout

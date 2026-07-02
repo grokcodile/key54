@@ -47,6 +47,10 @@ The released build is signed with a Developer ID and notarized by Apple, so it o
 
 > **Apple Silicon only.** The released `.dmg` is arm64; it won't run on Intel Macs — [build from source](#build-from-source) instead.
 
+### Updates
+
+Key54 checks for new releases once a day. When one is available, the settings window shows a notice with an **Update** button: Homebrew installs upgrade through `brew` and relaunch automatically; DMG installs download and open the new disk image so you can drag it across.
+
 ### Build from source
 
 Works on any Mac (including Intel):
@@ -89,14 +93,14 @@ The slider in settings controls how long you hold the right ⌘ key before the s
 
 ## Animation Style
 
-Pick how the hold is visualized while it charges. It only affects the presets that actually animate (Short / Medium / Long / Custom), and both styles follow your System Settings accent color on the Liquid Glass bezel:
+Pick how the hold is visualized while it charges. It only affects the presets that actually animate (Medium / Long / Custom — Instant and Short skip the charge entirely), and both styles follow your System Settings accent color on the Liquid Glass bezel:
 
 - **Power Up** — the chosen app's icon inside a glowing accent ring that sweeps to full as you hold.
 - **Level Up** — a larger icon over a glass that fills with your accent color as you hold, like a level meter topping off.
 
 ## Uninstall
 
-1. Open Key54 and click **Quit** (or toggle the switch to Disabled and click **Done**). (Or `killall Key54`.)
+1. Open Key54, toggle the switch to **Disabled** (this removes the login item), then click **Quit**. (Or just `killall Key54`.)
 2. Drag **Key54** from `Applications` to the Trash.
 3. Optionally remove its entry under System Settings → Privacy & Security → Accessibility.
 
@@ -116,11 +120,12 @@ The workflow then automatically:
 2. **Builds and signs** the app (Developer ID, Hardened Runtime, secure timestamp).
 3. **Notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
 4. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Install](#install) download link points to.
+5. **Bumps the Homebrew cask** in [grokcodile/homebrew-tap](https://github.com/grokcodile/homebrew-tap) to the new version + sha256, so `brew upgrade --cask key54` sees it immediately.
 
 **One-time setup.** Add these repository secrets (Settings → Secrets and
-variables → Actions). With all five set, the workflow signs + notarizes; without
-them it falls back to an ad-hoc `.dmg` that triggers a Gatekeeper warning — so
-set them before any public release:
+variables → Actions). With the signing + notary secrets set, the workflow signs
+and notarizes; without them it falls back to an ad-hoc `.dmg` that triggers a
+Gatekeeper warning — so set them before any public release:
 
 | Secret | Purpose |
 | --- | --- |
@@ -129,6 +134,7 @@ set them before any public release:
 | `AC_API_KEY_ID` | App Store Connect API **Key ID** |
 | `AC_API_ISSUER_ID` | App Store Connect API **Issuer ID** |
 | `AC_API_KEY_BASE64` | Base64 of the `AuthKey_XXXX.p8` |
+| `TAP_PUSH_TOKEN` | Fine-grained PAT with `contents: write` on `grokcodile/homebrew-tap` (for the cask bump; skipped if unset) |
 
 > Want a dry run? Trigger the workflow manually from the **Actions** tab — it
 > builds and notarizes but skips publishing (no tag, no release).

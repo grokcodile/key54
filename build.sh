@@ -17,7 +17,7 @@ rm -rf ./build
 mkdir -p "${BUILD_DIR}/Contents/MacOS"
 mkdir -p "${BUILD_DIR}/Contents/Resources"
 
-# Icon — generate the full iconset (and README icon) from make_icon.swift,
+# Icon — generate the full iconset from make_icon.swift,
 # then quantize + pack into .icns.
 rm -rf AppIcon.iconset
 swift make_icon.swift AppIcon.iconset

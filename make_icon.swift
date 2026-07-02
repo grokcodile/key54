@@ -1,8 +1,9 @@
 #!/usr/bin/swift
 import AppKit
 
-// Generates every icon asset for Key54 in one pass: the AppIcon.iconset (all
-// sizes) and the README header icon. The icon *is* a MacBook-style keycap —
+// Generates the AppIcon.iconset (all sizes) for Key54. (The README/site icon,
+// docs/icon.png, is a committed one-off — tweaking the art here does NOT
+// regenerate it.) The icon *is* a MacBook-style keycap —
 // a raised top surface with backlit ⌘ + "command" legends — drawn full-bleed,
 // then fitted into the standard macOS icon-grid squircle (824/1024 + margin),
 // downsampling every size from a single premultiplied master to avoid edge
