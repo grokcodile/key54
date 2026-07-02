@@ -1073,15 +1073,66 @@
                 transition: opacity 0.25s ease;
             }
 
-            .features {
-                padding: 56px 24px;
+            /* ---------- Explore: segmented control + sliding panels ---------- */
+            .seg-ctl {
+                display: flex;
+                justify-content: center;
+                gap: 4px;
+                width: max-content;
+                max-width: 100%;
+                margin: 18px auto 34px;
+                padding: 4px;
+                background: var(--surface2);
+                border: 1px solid var(--divider);
+                border-radius: 999px;
             }
-            .features h2 {
-                text-align: center;
-                font-size: 26px;
+            .seg-btn {
+                border: 0;
+                background: none;
+                font: inherit;
+                font-size: 14px;
+                font-weight: 500;
+                color: var(--muted);
+                padding: 8px 18px;
+                border-radius: 999px;
+                cursor: pointer;
+                white-space: nowrap;
+                transition: color 0.15s ease, background 0.15s ease;
+            }
+            .seg-btn:hover {
+                color: var(--text);
+            }
+            .seg-btn.active {
+                background: var(--surface);
+                color: var(--text);
                 font-weight: 600;
-                margin: 0 0 10px;
-                letter-spacing: -0.01em;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+            }
+            .seg-btn:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: 2px;
+            }
+            .panels {
+                overflow: hidden;
+                transition: height 0.45s ease;
+            }
+            .ptrack {
+                display: flex;
+                align-items: flex-start;
+                transition: transform 0.45s ease;
+            }
+            .panel {
+                flex: 0 0 100%;
+                min-width: 0;
+            }
+            .panel[data-off] {
+                visibility: hidden;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .panels,
+                .ptrack {
+                    transition: none;
+                }
             }
             .whynotes {
                 margin: 0 auto 32px;
@@ -1108,7 +1159,7 @@
             }
             .grid {
                 display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(3, minmax(0, 1fr));
                 gap: 16px;
             }
             .card {
@@ -1118,9 +1169,9 @@
                 padding: 22px;
             }
             .card .ic {
-                width: 40px;
-                height: 40px;
-                border-radius: 11px;
+                width: 56px;
+                height: 56px;
+                border-radius: 15px;
                 background: rgba(0, 113, 227, 0.09);
                 display: flex;
                 align-items: center;
@@ -1129,8 +1180,8 @@
                 margin-bottom: 14px;
             }
             .card .ic svg {
-                width: 22px;
-                height: 22px;
+                width: 30px;
+                height: 30px;
             }
             .card h3 {
                 font-size: 17px;
@@ -1249,18 +1300,11 @@
                 letter-spacing: 0.04em;
                 color: var(--accent);
             }
-            .card .tag {
-                font-size: 12px;
-                font-weight: 700;
-                color: var(--accent);
-                text-transform: uppercase;
-                letter-spacing: 0.03em;
-            }
             /* the example's real app icon */
             .usehud {
                 width: 56px;
                 height: 56px;
-                margin: 12px 0 16px;
+                margin: 0 0 14px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -1318,54 +1362,30 @@
             .btn.star:hover {
                 background: #000;
             }
-            .btn.primary {
-                background: var(--accent);
-                color: #fff;
-                border-color: var(--accent);
-                justify-content: center;
+            /* ---------- closing download band ---------- */
+            .ctaband {
+                background: rgba(0, 113, 227, 0.05);
+                border-top: 1px solid var(--divider);
+                border-bottom: 1px solid var(--divider);
             }
-            .btn.primary:hover {
-                background: var(--accent);
-                filter: brightness(1.06);
+            .ctaband .sec {
+                text-align: center;
             }
-            .feedback-form {
-                max-width: 520px;
-                margin: 0 auto;
-                display: flex;
-                flex-direction: column;
-                gap: 14px;
+            .ctaband h2 {
+                margin-bottom: 24px;
             }
-            .field {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-                text-align: left;
-            }
-            .field label {
+            .ctaband .trust {
                 font-size: 13px;
-                font-weight: 600;
+                color: var(--dim);
+                max-width: 460px;
+                margin: 18px auto 0;
             }
-            .field select,
-            .field input,
-            .field textarea {
-                font: inherit;
-                font-size: 15px;
-                padding: 10px 12px;
-                border: 1px solid var(--border);
-                border-radius: 10px;
-                background: var(--surface);
-                color: var(--text);
-                width: 100%;
-            }
-            .field textarea {
-                min-height: 120px;
-                resize: vertical;
-            }
-            .feedback-note {
+            .reopen {
                 font-size: 13px;
                 color: var(--dim);
                 text-align: center;
-                margin: 2px 0 0;
+                max-width: 420px;
+                margin: 22px auto 0;
             }
             /* ---------- expanded footer ---------- */
             footer {
@@ -1425,6 +1445,11 @@
             }
 
             @media (max-width: 560px) {
+                /* Keep all three segment labels inside the pill on phones. */
+                .seg-btn {
+                    font-size: 13px;
+                    padding: 7px 12px;
+                }
                 .reveal {
                     height: 150px;
                 }
@@ -1513,9 +1538,9 @@
                             <a href="#features">Features</a>
                             <a href="#examples">Examples</a>
                             <a href="#comparison">Comparison</a>
-                            <a href="#screenshot">Screenshot</a>
-                            <a href="#contribute">Contribute</a>
-                            <a href="#feedback">Feedback</a>
+                            <a href="#screenshot">Setup</a>
+                            <a href="#get">Download</a>
+                            <a href="#contribute">Open source</a>
                         </div>
                     </div>
                 </div>
@@ -1533,8 +1558,8 @@
                 </span>
             </h1>
             <p>
-                Hold the right-Command (⌘) key to summon the one app you reach
-                for constantly — hold it again to switch back.
+                Pick the one app you reach for constantly. Hold the
+                right-Command (⌘) key to summon it — hold again to switch back.
             </p>
             <div class="hero-cta">
                 <a
@@ -1883,15 +1908,24 @@
                     </div>
                 </div>
                 <p class="kbnote">
-                    Use the key on your keyboard or click and hold the button
-                    above.
+                    Hold the glowing key — with your keyboard's right ⌘, or by
+                    pressing it right here. (Terminal is just the demo — in the
+                    app, you pick any application.)
                 </p>
             </div>
         </section>
 
-        <section class="features" id="features">
-            <div class="wrap">
-                <h2>Why Key54?</h2>
+        <section class="explore" id="explore">
+            <div class="sec">
+                <h2>A closer look.</h2>
+                <div class="seg-ctl" role="tablist" aria-label="Explore Key54">
+                    <button class="seg-btn active" role="tab" id="tab-features" aria-controls="features" aria-selected="true" type="button">Features</button>
+                    <button class="seg-btn" role="tab" id="tab-comparison" aria-controls="comparison" aria-selected="false" tabindex="-1" type="button">Comparison</button>
+                    <button class="seg-btn" role="tab" id="tab-examples" aria-controls="examples" aria-selected="false" tabindex="-1" type="button">Examples</button>
+                </div>
+                <div class="panels" id="panels">
+                <div class="ptrack" id="ptrack">
+                <div class="panel" role="tabpanel" id="features" aria-labelledby="tab-features">
                 <div class="whynotes">
                     <p class="whynote">
                         <code>54</code> is the macOS keycode for the right ⌘
@@ -1912,6 +1946,16 @@
                     </div>
                     <div class="card">
                         <div class="ic">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13"/><path d="M14 6l3 3-3 3"/><path d="M20 15H7"/><path d="M10 12l-3 3 3 3"/></svg>
+                        </div>
+                        <h3>Out and back</h3>
+                        <p>
+                            The same hold that summons your app sends you back —
+                            even if it wasn't running yet.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="ic">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="5.6"/><circle cx="12" cy="12" r="9"/></svg>
                         </div>
                         <h3>Calm by design</h3>
@@ -1922,24 +1966,12 @@
                     </div>
                     <div class="card">
                         <div class="ic">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13"/><path d="M14 6l3 3-3 3"/><path d="M20 15H7"/><path d="M10 12l-3 3 3 3"/></svg>
-                        </div>
-                        <h3>Out and back</h3>
-                        <p>
-                            The same gesture that summons your app also sends
-                            you right back. Other switchers make you find your
-                            own way back.
-                        </p>
-                    </div>
-                    <div class="card">
-                        <div class="ic">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
                         </div>
                         <h3>Keeps your shortcuts</h3>
                         <p>
-                            A built-in hold delay lets quick taps and your
-                            normal right-⌘ shortcuts pass straight through — it
-                            only fires on a deliberate hold.
+                            Quick taps and normal right-⌘ shortcuts pass straight
+                            through — only a deliberate hold fires.
                         </p>
                     </div>
                     <div class="card">
@@ -1948,8 +1980,8 @@
                         </div>
                         <h3>Tiny &amp; invisible</h3>
                         <p>
-                            About 1 MB, no Dock icon, no menu bar clutter.
-                            Starts at login. Stays out of the way.
+                            No Dock icon, no menu bar clutter. Starts at login
+                            and stays out of the way.
                         </p>
                     </div>
                     <div class="card">
@@ -1963,117 +1995,27 @@
                         </p>
                     </div>
                 </div>
-            </div>
-        </section>
-
-        <section class="band" id="examples">
-            <div class="sec">
-                <h2>Ways to use it.</h2>
-                <p class="lead">
-                    Pick the one app you're always dropping into and back out of.
-                    The pattern is always the same: summon, do the thing, dismiss.
-                </p>
-                <div class="grid">
-                    <div class="card">
-                        <span class="tag">Developer</span>
-                        <div class="usehud">
-                            <img src="app-terminal.png" alt="Terminal" />
-                        </div>
-                        <h3>Your terminal</h3>
-                        <p>
-                            Run a quick install or git command mid-task, check a
-                            deploy — then one key back. The full terminal with every
-                            tab and session, not a stripped-down drawer.
-                        </p>
-                    </div>
-                    <div class="card">
-                        <span class="tag">Researcher</span>
-                        <div class="usehud">
-                            <img src="app-safari.png" alt="Safari" />
-                        </div>
-                        <h3>Your browser</h3>
-                        <p>
-                            Reading or writing and need to look something up? One
-                            hold brings all browsing sessions forward, one hold
-                            returns to the work — no new window, no search box.
-                        </p>
-                    </div>
-                    <div class="card">
-                        <span class="tag">Note taker</span>
-                        <div class="usehud">
-                            <img src="app-notes.png" alt="Notes" />
-                        </div>
-                        <h3>Your notes</h3>
-                        <p>
-                            A thought worth capturing never means hunting for the
-                            right window. One hold to the notebook, jot it down, one
-                            hold back. The capture friction just disappears.
-                        </p>
-                    </div>
-                    <div class="card">
-                        <span class="tag">Knowledge worker</span>
-                        <div class="usehud">
-                            <img src="app-claude.png" alt="Claude" />
-                        </div>
-                        <h3>Your assistant</h3>
-                        <p>
-                            Bind Claude or your AI chatbot of choice — one hold
-                            to ask a question or paste a snippet, one hold back
-                            to your work with the answer.
-                        </p>
-                    </div>
-                    <div class="card">
-                        <span class="tag">Manager</span>
-                        <div class="usehud">
-                            <img src="app-mail.png" alt="Mail" />
-                        </div>
-                        <h3>Your email</h3>
-                        <p>
-                            Glance at a message and reply, then drop straight back
-                            into focus — without getting sucked in and losing the
-                            thread of deeper work.
-                        </p>
-                    </div>
-                    <div class="card">
-                        <span class="tag">Teleconferencer</span>
-                        <div class="usehud">
-                            <img src="app-shortcuts.png" alt="Shortcuts" />
-                        </div>
-                        <h3>Your mic</h3>
-                        <p>
-                            Back-to-back calls? Bind a Shortcut that toggles your
-                            mic — one hold to mute or unmute, no hunting for the
-                            meeting window.
-                        </p>
-                    </div>
                 </div>
-            </div>
-        </section>
-
-        <section class="sec" id="comparison">
-            <h2>Not another launcher.</h2>
+                <div class="panel" role="tabpanel" id="comparison" aria-labelledby="tab-comparison">
             <p class="lead">
                 Key54 gives a single dedicated key to the app you most often
-                switch in and out of mid-task — no search, no list to cycle, no
-                shortcut to choose. Honestly, you can really use it for anything
-                you want. It's made to work alongside your favorite launcher,
-                not replace it.
+                switch in and out of mid-task. It's made to work alongside your
+                favorite launcher, not replace it.
             </p>
             <div class="compare">
                 <div class="crow">
                     <div class="chead">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
-                        <h3>App grids &amp; all-apps browsers</h3>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+                        <h3>Direct-key app shortcuts</h3>
                     </div>
-                    <p class="apps"><span class="apps-label">Popular tools</span>Launchpad · Apps (macOS Tahoe) · <a href="https://launchosapp.com/" target="_blank" rel="noopener">LaunchOS</a> · <a href="https://apps.apple.com/app/launchie/id6752657468?mt=12" target="_blank" rel="noopener">Launchie</a> · <a href="https://apps.apple.com/us/app/appgrid-launcher/id6748853585" target="_blank" rel="noopener">AppGrid Launcher</a> · <a href="https://apps.apple.com/app/folder-peek/id1615988943" target="_blank" rel="noopener">Folder Peek</a></p>
+                    <p class="apps"><span class="apps-label">Popular tools</span><a href="https://lowtechguys.com/rcmd/" target="_blank" rel="noopener">rcmd</a> · <a href="https://manico.im/" target="_blank" rel="noopener">Manico</a> · <a href="https://karabiner-elements.pqrs.org" target="_blank" rel="noopener">Karabiner-Elements</a> · <a href="https://www.hammerspoon.org" target="_blank" rel="noopener">Hammerspoon</a> · <a href="https://tunaformac.com/" target="_blank" rel="noopener">Tuna</a> · <a href="https://www.keyboardmaestro.com" target="_blank" rel="noopener">Keyboard Maestro</a></p>
                     <p class="how">
-                        Fill the screen with every app you've installed as a
-                        paged grid, then scan the icons and click to launch.
+                        Map a keyboard shortcut to a specific app — from a key
+                        plus a letter to a fully custom config. The closest idea
+                        to Key54.
                     </p>
                     <div class="vsline">vs. Key54</div>
-                    <p class="vs">
-                        No grid to open and no wall of icons to scan through.
-                    </p>
+                    <p class="vs">No chord and no letter to remember.</p>
                 </div>
                 <div class="crow">
                     <div class="chead">
@@ -2083,8 +2025,8 @@
                     <p class="apps"><span class="apps-label">Popular tools</span>Spotlight · <a href="https://www.raycast.com" target="_blank" rel="noopener">Raycast</a> · <a href="https://www.alfredapp.com" target="_blank" rel="noopener">Alfred</a> · <a href="https://www.obdev.at/products/launchbar/" target="_blank" rel="noopener">LaunchBar</a> · <a href="https://qsapp.com" target="_blank" rel="noopener">Quicksilver</a> · <a href="https://sol.ospfranco.com" target="_blank" rel="noopener">Sol</a> · <a href="https://www.monarchlauncher.com/" target="_blank" rel="noopener">Monarch</a></p>
                     <p class="how">
                         Pop open a search box, type a few letters, and pick your
-                        app from the results — usually alongside files, actions,
-                        and quick calculations.
+                        app from the results — usually alongside files and other
+                        commands.
                     </p>
                     <div class="vsline">vs. Key54</div>
                     <p class="vs">No box to summon and nothing to type.</p>
@@ -2108,20 +2050,95 @@
                 </div>
                 <div class="crow">
                     <div class="chead">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
-                        <h3>Direct-key app switchers</h3>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
+                        <h3>App grids &amp; all-apps browsers</h3>
                     </div>
-                    <p class="apps"><span class="apps-label">Popular tools</span><a href="https://lowtechguys.com/rcmd/" target="_blank" rel="noopener">rcmd</a> · <a href="https://manico.im/" target="_blank" rel="noopener">Manico</a> · <a href="https://karabiner-elements.pqrs.org" target="_blank" rel="noopener">Karabiner-Elements</a> · <a href="https://www.hammerspoon.org" target="_blank" rel="noopener">Hammerspoon</a> · <a href="https://tunaformac.com/" target="_blank" rel="noopener">Tuna</a> · <a href="https://www.keyboardmaestro.com" target="_blank" rel="noopener">Keyboard Maestro</a></p>
+                    <p class="apps"><span class="apps-label">Popular tools</span>Launchpad · Apps (macOS Tahoe) · <a href="https://launchosapp.com/" target="_blank" rel="noopener">LaunchOS</a> · <a href="https://apps.apple.com/app/launchie/id6752657468?mt=12" target="_blank" rel="noopener">Launchie</a> · <a href="https://apps.apple.com/us/app/appgrid-launcher/id6748853585" target="_blank" rel="noopener">AppGrid Launcher</a> · <a href="https://apps.apple.com/app/folder-peek/id1615988943" target="_blank" rel="noopener">Folder Peek</a></p>
                     <p class="how">
-                        Map a keyboard shortcut to a specific app — from a key
-                        plus a letter to a fully custom config. The closest idea
-                        to Key54.
+                        Fill the screen with every app you've installed as a
+                        paged grid, then scan the icons and click to launch.
                     </p>
                     <div class="vsline">vs. Key54</div>
                     <p class="vs">
-                        No chord and no letter to remember — one hold summons the
-                        app, the next sends you back.
+                        No grid to open and no wall of icons to scan through.
                     </p>
+                </div>
+            </div>
+                </div>
+                <div class="panel" role="tabpanel" id="examples" aria-labelledby="tab-examples">
+                <p class="lead">
+                    Pick the one app you're always dropping into and back out of.
+                    The pattern is always the same: summon, do the thing, dismiss.
+                </p>
+                <div class="grid">
+                    <div class="card">
+                        <div class="usehud">
+                            <img src="app-safari.png" alt="Safari" />
+                        </div>
+                        <h3>Your browser</h3>
+                        <p>
+                            Need to look something up mid-sentence? All your
+                            browsing sessions come forward exactly as you left
+                            them — no new window, no search box.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="usehud">
+                            <img src="app-mail.png" alt="Mail" />
+                        </div>
+                        <h3>Your email</h3>
+                        <p>
+                            Glance at a message and reply, then drop straight back
+                            into focus — without getting sucked in and losing the
+                            thread of deeper work.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="usehud">
+                            <img src="app-notes.png" alt="Notes" />
+                        </div>
+                        <h3>Your notes</h3>
+                        <p>
+                            A thought worth capturing never means hunting for the
+                            right window — jot it down while it's still fresh.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="usehud">
+                            <img src="app-terminal.png" alt="Terminal" />
+                        </div>
+                        <h3>Your terminal</h3>
+                        <p>
+                            Run a quick install or git command mid-task, check a
+                            deploy. The full terminal with every tab and session,
+                            not a stripped-down drawer.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="usehud">
+                            <img src="app-claude.png" alt="Claude" />
+                        </div>
+                        <h3>Your assistant</h3>
+                        <p>
+                            Bind Claude or your AI chatbot of choice — ask a
+                            question or paste a snippet, and come back with the
+                            answer.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="usehud">
+                            <img src="app-shortcuts.png" alt="Shortcuts" />
+                        </div>
+                        <h3>Your shortcut</h3>
+                        <p>
+                            Save any Shortcut you've built as an app (File → Add
+                            to Dock) and bind it — mute your mic, start a timer,
+                            run whatever you've automated.
+                        </p>
+                    </div>
+                </div>
+                </div>
+                </div>
                 </div>
             </div>
         </section>
@@ -2142,16 +2159,55 @@
                     <div class="seg check" data-text="Click Done — you're all set!">✓</div>
                 </div>
                 <div class="stepdesc" id="stepdesc">Pick the app you context-switch to most often.</div>
+                <p class="reopen">
+                    No Dock icon to hunt for — open Key54 again from
+                    Applications or Spotlight any time to change these.
+                </p>
+            </div>
+        </section>
+
+        <section class="ctaband" id="get">
+            <div class="sec">
+                <h2>Give your favorite app its own key.</h2>
+                <div class="hero-cta">
+                    <a
+                        class="dl"
+                        href="https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg>
+                        Download for macOS
+                    </a>
+                    <span class="cta-or">or</span>
+                    <div class="brew">
+                        <code
+                            ><span class="brew-prompt">$</span>brew install --cask
+                            grokcodile/tap/key54</code
+                        >
+                        <button
+                            class="brew-copy"
+                            type="button"
+                            data-copy="brew install --cask grokcodile/tap/key54"
+                            aria-label="Copy Homebrew install command"
+                        >
+                            <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                            <svg class="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <p class="trust">
+                    On first launch, macOS asks for Accessibility access —
+                    that's how Key54 watches the right ⌘ key. It's listen-only,
+                    open source, and nothing ever leaves your Mac.
+                </p>
             </div>
         </section>
 
         <section class="sec support" id="contribute">
-            <h2>Free — chip in if you like it.</h2>
+            <h2>Free &amp; open source.</h2>
             <p class="free">
-                Key54 is free and open source — no upsell, no account. If it's
-                earned a spot on your Mac, here are a few ways to help it keep
-                going. A star helps more people find it; tips go toward
-                development costs.
+                No upsell, no account — MIT-licensed and built in the open. If
+                Key54 earns a spot on your Mac: a star helps more people find
+                it, tips keep it going, and bug reports make it better.
             </p>
             <div class="cta-row">
                 <a class="btn star" href="https://github.com/grokcodile/key54">
@@ -2166,49 +2222,10 @@
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.2-8.06C1.1 10.1 2.2 6.5 5.4 6.5c2 0 3.3 1.2 6.6 4.3 3.3-3.1 4.6-4.3 6.6-4.3 3.2 0 4.3 3.6 2.6 6.44C18.7 16.65 12 21 12 21z"/></svg>
                     Sponsor
                 </a>
-            </div>
-        </section>
-
-        <section class="band" id="feedback">
-            <div class="sec">
-                <h2>Found a bug or have an idea?</h2>
-                <p class="lead">
-                    Send it straight to the project. This opens a pre-filled
-                    issue on GitHub — review it, then submit.
-                </p>
-                <form class="feedback-form" id="feedbackForm">
-                    <div class="field">
-                        <label for="fbType">Type</label>
-                        <select id="fbType">
-                            <option value="bug">Bug report</option>
-                            <option value="enhancement">Feature request</option>
-                            <option value="feedback">General feedback</option>
-                        </select>
-                    </div>
-                    <div class="field">
-                        <label for="fbTitle">Summary</label>
-                        <input
-                            id="fbTitle"
-                            type="text"
-                            placeholder="A short, clear title"
-                        />
-                    </div>
-                    <div class="field">
-                        <label for="fbBody">Details</label>
-                        <textarea
-                            id="fbBody"
-                            placeholder="What happened and what you expected, steps to reproduce, or your idea…"
-                        ></textarea>
-                    </div>
-                    <button class="btn primary" type="submit">
-                        Open issue on GitHub →
-                    </button>
-                    <p class="feedback-note">
-                        You'll be taken to GitHub with everything filled in —
-                        nothing is sent until you submit it there. A free GitHub
-                        account is required to post.
-                    </p>
-                </form>
+                <a class="btn" href="https://github.com/grokcodile/key54/issues/new">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M9 6l-2.2-2.2"/><path d="M15 6l2.2-2.2"/><path d="M12 10v3.5"/><path d="M12 16.6h.01"/></svg>
+                    Report a bug
+                </a>
             </div>
         </section>
 
@@ -2219,8 +2236,7 @@
                         ><img src="icon.png" alt="Key54 icon" /> Key54</span
                     >
                     <p>
-                        One key for the one app you reach for constantly. Free
-                        &amp; open source.
+                        One key for the one app you reach for constantly.
                     </p>
                 </div>
                 <div class="foot-col">
@@ -2229,8 +2245,8 @@
                     <a href="#features">Features</a>
                     <a href="#examples">Examples</a>
                     <a href="#comparison">Comparison</a>
-                    <a href="#screenshot">Screenshot</a>
-                    <a href="#feedback">Feedback</a>
+                    <a href="#screenshot">Setup</a>
+                    <a href="#get">Download</a>
                 </div>
                 <div class="foot-col">
                     <h4>Get it</h4>
@@ -2253,6 +2269,9 @@
                     >
                     <a href="https://ko-fi.com/grokcodile">Buy me a coffee</a>
                     <a href="https://github.com/sponsors/grokcodile">Sponsor</a>
+                    <a href="https://github.com/grokcodile/key54/issues/new"
+                        >Report a bug</a
+                    >
                 </div>
             </div>
             <div class="foot-fine">
@@ -2534,35 +2553,126 @@
                     });
                 }
 
-                // Feedback form: open a pre-filled GitHub issue (nothing is sent
-                // until the visitor submits it on GitHub themselves).
-                var fbForm = document.getElementById("feedbackForm");
-                if (fbForm) {
-                    fbForm.addEventListener("submit", function (e) {
-                        e.preventDefault();
-                        var type = document.getElementById("fbType").value,
-                            title = document
-                                .getElementById("fbTitle")
-                                .value.trim(),
-                            body = document
-                                .getElementById("fbBody")
-                                .value.trim();
-                        var prefix =
-                            type === "bug"
-                                ? "[Bug] "
-                                : type === "enhancement"
-                                  ? "[Feature] "
-                                  : "[Feedback] ";
-                        var url =
-                            "https://github.com/grokcodile/key54/issues/new" +
-                            "?labels=" +
-                            encodeURIComponent(type) +
-                            "&title=" +
-                            encodeURIComponent(prefix + title) +
-                            "&body=" +
-                            encodeURIComponent(body);
-                        window.open(url, "_blank", "noopener");
+                // Explore tabs: the segmented control slides three panels
+                // (Why / Ways to use it / vs. Other tools); the container's
+                // height animates to the active panel; #features/#examples/
+                // #comparison anchors deep-link into the right tab.
+                var tabs = Array.prototype.slice.call(
+                        document.querySelectorAll(".seg-btn"),
+                    ),
+                    panelsBox = document.getElementById("panels"),
+                    ptrack = document.getElementById("ptrack"),
+                    panels = ptrack
+                        ? Array.prototype.slice.call(ptrack.children)
+                        : [],
+                    activeIdx = 0,
+                    offTimer;
+                function layoutPanels() {
+                    if (panelsBox && panels[activeIdx])
+                        panelsBox.style.height =
+                            panels[activeIdx].offsetHeight + "px";
+                }
+                function activateTab(i) {
+                    activeIdx = i;
+                    tabs.forEach(function (t, j) {
+                        t.classList.toggle("active", j === i);
+                        t.setAttribute("aria-selected", String(j === i));
+                        t.tabIndex = j === i ? 0 : -1;
                     });
+                    // Every panel stays visible while the track slides; the
+                    // inactive ones leave the accessibility/tab order after.
+                    clearTimeout(offTimer);
+                    panels.forEach(function (p) {
+                        p.removeAttribute("data-off");
+                    });
+                    ptrack.style.transform =
+                        "translateX(" + -i * 100 + "%)";
+                    layoutPanels();
+                    offTimer = setTimeout(function () {
+                        panels.forEach(function (p, j) {
+                            if (j !== i) p.setAttribute("data-off", "");
+                        });
+                    }, 500);
+                }
+                if (ptrack && tabs.length === panels.length && tabs.length) {
+                    tabs.forEach(function (t, i) {
+                        t.addEventListener("click", function () {
+                            activateTab(i);
+                        });
+                    });
+                    document
+                        .querySelector(".seg-ctl")
+                        .addEventListener("keydown", function (e) {
+                            var d =
+                                e.key === "ArrowRight"
+                                    ? 1
+                                    : e.key === "ArrowLeft"
+                                      ? -1
+                                      : 0;
+                            if (!d) return;
+                            e.preventDefault();
+                            var n =
+                                (activeIdx + d + tabs.length) % tabs.length;
+                            activateTab(n);
+                            tabs[n].focus();
+                        });
+                    // Swipe between panels on touch.
+                    var tx = null,
+                        ty = null;
+                    panelsBox.addEventListener(
+                        "touchstart",
+                        function (e) {
+                            tx = e.touches[0].clientX;
+                            ty = e.touches[0].clientY;
+                        },
+                        { passive: true },
+                    );
+                    panelsBox.addEventListener(
+                        "touchend",
+                        function (e) {
+                            if (tx === null) return;
+                            var dx = e.changedTouches[0].clientX - tx,
+                                dy = e.changedTouches[0].clientY - ty;
+                            tx = ty = null;
+                            if (
+                                Math.abs(dx) < 60 ||
+                                Math.abs(dx) < Math.abs(dy) * 1.5
+                            )
+                                return;
+                            var n = activeIdx + (dx < 0 ? 1 : -1);
+                            if (n >= 0 && n < panels.length) activateTab(n);
+                        },
+                        { passive: true },
+                    );
+                    // Anchors to a panel id activate its tab and scroll here.
+                    var panelIds = panels.map(function (p) {
+                        return p.id;
+                    });
+                    function goToHash(hash, smooth) {
+                        var i = panelIds.indexOf(
+                            (hash || "").replace("#", ""),
+                        );
+                        if (i < 0) return false;
+                        activateTab(i);
+                        document
+                            .getElementById("explore")
+                            .scrollIntoView(
+                                smooth ? { behavior: "smooth" } : undefined,
+                            );
+                        return true;
+                    }
+                    document.addEventListener("click", function (e) {
+                        var a = e.target.closest('a[href^="#"]');
+                        if (!a) return;
+                        if (goToHash(a.getAttribute("href"), true))
+                            e.preventDefault();
+                    });
+                    window.addEventListener("resize", layoutPanels);
+                    window.addEventListener("load", function () {
+                        layoutPanels();
+                        if (location.hash) goToHash(location.hash, false);
+                    });
+                    activateTab(0);
                 }
             })();
         </script>
