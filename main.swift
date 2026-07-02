@@ -106,8 +106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             showSettings()
         }
 
-        // Look for a newer release now, then retry every 6 h — successful checks
-        // throttle themselves to one a day; failed ones (offline) retry sooner.
+        // Look for a newer release now, then every 6 h while running.
         checkForUpdate()
         updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
             self?.checkForUpdate()
@@ -148,7 +147,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.updateAppDisplay()
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
-        checkForUpdate()   // refresh the footer's update status (throttled)
+        checkForUpdate()   // footer shows fresh update status whenever it's seen
     }
 
     // MARK: - App tracking
@@ -494,13 +493,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Updates
 
-    /// Ask GitHub for the latest release, at most once a day. On a newer version,
-    /// the settings footer surfaces an Update button (it doesn't update on its own).
-    func checkForUpdate(force: Bool = false) {
-        let now = Date().timeIntervalSince1970
-        let last = UserDefaults.standard.double(forKey: "lastUpdateCheck")
-        if !force && now - last < 86_400 { return }
-
+    /// Ask GitHub for the latest release. Deliberately unthrottled — it fires on
+    /// launch, every 6 h, and on every settings open (a handful of requests a day),
+    /// so the footer always reflects fresh state whenever eyes are on it. On a
+    /// newer version the footer surfaces an Update button (it never self-updates).
+    func checkForUpdate() {
         guard let url = URL(string: "https://api.github.com/repos/grokcodile/key54/releases/latest")
         else { return }
         var req = URLRequest(url: url)
@@ -512,25 +509,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   let tag = json["tag_name"] as? String else { return }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             guard let self else { return }
-            await MainActor.run {
-                // Stamp the throttle only on a successful answer — a failed check
-                // (offline launch) shouldn't block detection for a day; the 6 h
-                // timer retries it.
-                UserDefaults.standard.set(now, forKey: "lastUpdateCheck")
-                self.handleLatest(latest)
-            }
+            await MainActor.run { self.handleLatest(latest) }
         }
     }
 
     private func handleLatest(_ latest: String) {
-        guard AppDelegate.isVersion(latest, newerThan: appVersion) else {
-            latestVersion = nil
-            updateState = .upToDate
-            settingsWindow?.refreshFooter()
-            return
-        }
-        latestVersion = latest
-        updateState = .available     // surface the footer's Update button; don't auto-run
+        // Never interrupt an update already in flight.
+        guard updateState != .updating, updateState != .downloading else { return }
+        let newState: UpdateState =
+            AppDelegate.isVersion(latest, newerThan: appVersion) ? .available : .upToDate
+        let newLatest = newState == .available ? latest : nil
+        // Only touch the window on a real transition — refreshFooter rebuilds and
+        // recenters it, which must not happen on a routine "no news" check.
+        guard newState != updateState || newLatest != latestVersion else { return }
+        latestVersion = newLatest
+        updateState = newState
         settingsWindow?.refreshFooter()
     }
 
