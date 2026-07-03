@@ -1423,13 +1423,13 @@ class SettingsWindow: NSWindow {
         NSWorkspace.shared.open(URL(string: "https://ko-fi.com/grokcodile")!)
     }
 
-    @objc private func openSponsors() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/sponsors/grokcodile")!)
+    @objc private func openRepo() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/grokcodile/key54")!)
     }
 
     /// A little "note from the developer" popover that slides out of the Tip
-    /// Jar link: a round headshot, a personal message, the two ways to support
-    /// Key54, and a link to file issues.
+    /// Jar link: a round headshot, a personal message, and the three ways to
+    /// support Key54 (mirroring the website's Support section).
     @objc private func openTipJar(_ sender: NSButton) {
         let w: CGFloat = 285, h: CGFloat = 284
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
@@ -1460,41 +1460,31 @@ class SettingsWindow: NSWindow {
         v.addSubview(greeting)
 
         let body = NSTextField(wrappingLabelWithString:
-            "Key54 is 100% free, but if it's earned a spot on your Mac, a small donation helps me keep it updated and supported!")
+            "Key54 is 100% free. If it's earned a spot on your Mac: a star helps others find it, tips keep it going, and bug reports make it better!")
         body.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
         body.textColor = .secondaryLabelColor
         body.alignment = .center
-        body.frame = NSRect(x: 18, y: 118, width: w - 36, height: 52)
+        body.frame = NSRect(x: 18, y: 126, width: w - 36, height: 46)
         v.addSubview(body)
 
         let btnW: CGFloat = 210
-        let kofi = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 80, width: btnW, height: 30))
-        kofi.title = "☕  Leave a tip on Ko-fi"
+        let star = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 92, width: btnW, height: 30))
+        star.title = "⭐️  Star on GitHub"
+        star.target = self
+        star.action = #selector(openRepo)
+        v.addSubview(star)
+
+        let kofi = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 54, width: btnW, height: 30))
+        kofi.title = "☕  Buy me a coffee"
         kofi.target = self
         kofi.action = #selector(openCoffee)
         v.addSubview(kofi)
 
-        let spon = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 42, width: btnW, height: 30))
-        spon.title = "❤️  Sponsor me on GitHub"
-        spon.target = self
-        spon.action = #selector(openSponsors)
-        v.addSubview(spon)
-
-        // Subtle footer link to the repo's issues.
-        let issue = LinkButton(title: "", target: self, action: #selector(openIssues))
-        issue.isBordered = false
-        let issueTitle = "Report a bug or request a feature" as NSString
-        let issueAttr = NSMutableAttributedString(string: issueTitle as String)
-        issueAttr.addAttributes([
-            .foregroundColor: NSColor.secondaryLabelColor,
-            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize - 2),
-            .underlineStyle: NSUnderlineStyle.single.rawValue,
-        ], range: NSRange(location: 0, length: issueTitle.length))
-        issue.attributedTitle = issueAttr
-        issue.sizeToFit()
-        issue.frame = NSRect(x: (w - issue.frame.width) / 2, y: 12,
-                             width: issue.frame.width, height: 18)
-        v.addSubview(issue)
+        let bug = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 16, width: btnW, height: 30))
+        bug.title = "🐞  Report a bug"
+        bug.target = self
+        bug.action = #selector(openIssues)
+        v.addSubview(bug)
 
         let vc = NSViewController()
         vc.view = v
@@ -1507,7 +1497,7 @@ class SettingsWindow: NSWindow {
     }
 
     @objc private func openIssues() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/grokcodile/key54/issues")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/grokcodile/key54/issues/new")!)
     }
 }
 
