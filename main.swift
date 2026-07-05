@@ -1431,13 +1431,36 @@ class SettingsWindow: NSWindow {
     /// Jar link: a round headshot, a personal message, and the three ways to
     /// support Key54 (mirroring the website's Support section).
     @objc private func openTipJar(_ sender: NSButton) {
-        let w: CGFloat = 285, h: CGFloat = 284
+        let w: CGFloat = 285
+        let pad: CGFloat = 16, d: CGFloat = 64
+        let btnW: CGFloat = 210, btnH: CGFloat = 30, btnGap: CGFloat = 8
+
+        // The body is the only piece with a content-dependent height — measure
+        // the wrapped text and derive every frame (and the popover height) from
+        // it, so copy changes can never clip again.
+        let body = NSTextField(wrappingLabelWithString:
+            "Key54 is 100% free.\nIf it's earned a spot on your Mac…")
+        body.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
+        body.textColor = .secondaryLabelColor
+        body.alignment = .center
+        let bodyW = w - 36
+        let bodyH = ceil(body.sizeThatFits(
+            NSSize(width: bodyW, height: .greatestFiniteMagnitude)).height)
+
+        // Stack, bottom up: three pitch-as-button rows, body, greeting, headshot.
+        let bugY = pad
+        let kofiY = bugY + btnH + btnGap
+        let starY = kofiY + btnH + btnGap
+        let bodyY = starY + btnH + 12
+        let greetingY = bodyY + bodyH + 8
+        let photoY = greetingY + 20 + 10
+        let h = photoY + d + pad
+
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
 
         // Round headshot — `headshot.heic` (128 px = 2× the 64 pt view) bundled
         // into Resources by build.sh. HEIC keeps the asset ~7 KB instead of ~128 KB.
-        let d: CGFloat = 64
-        let photo = NSView(frame: NSRect(x: (w - d) / 2, y: 204, width: d, height: d))
+        let photo = NSView(frame: NSRect(x: (w - d) / 2, y: photoY, width: d, height: d))
         photo.wantsLayer = true
         photo.layer?.cornerRadius = d / 2
         photo.layer?.masksToBounds = true
@@ -1456,35 +1479,29 @@ class SettingsWindow: NSWindow {
         let greeting = NSTextField(labelWithString: "Hi, I'm Ethan 👋")
         greeting.font = .systemFont(ofSize: 15, weight: .semibold)
         greeting.alignment = .center
-        greeting.frame = NSRect(x: 16, y: 176, width: w - 32, height: 20)
+        greeting.frame = NSRect(x: 16, y: greetingY, width: w - 32, height: 20)
         v.addSubview(greeting)
 
-        let body = NSTextField(wrappingLabelWithString:
-            "Key54 is 100% free. If it's earned a spot on your Mac: a star helps others find it, tips keep it going, and bug reports make it better!")
-        body.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
-        body.textColor = .secondaryLabelColor
-        body.alignment = .center
-        body.frame = NSRect(x: 18, y: 126, width: w - 36, height: 46)
+        body.frame = NSRect(x: 18, y: bodyY, width: bodyW, height: bodyH)
         v.addSubview(body)
 
-        let btnW: CGFloat = 210
-        let star = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 92, width: btnW, height: 30))
-        star.title = "⭐️  Star on GitHub"
-        star.target = self
-        star.action = #selector(openRepo)
-        v.addSubview(star)
-
-        let kofi = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 54, width: btnW, height: 30))
-        kofi.title = "☕  Buy me a coffee"
-        kofi.target = self
-        kofi.action = #selector(openCoffee)
-        v.addSubview(kofi)
-
-        let bug = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: 16, width: btnW, height: 30))
-        bug.title = "🐞  Report a bug"
-        bug.target = self
-        bug.action = #selector(openIssues)
-        v.addSubview(bug)
+        // The lead's ellipsis hands off into three centered action buttons.
+        func actionRow(_ y: CGFloat, _ title: String, _ tip: String,
+                       _ action: Selector) -> HoverButton {
+            let b = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: y,
+                                              width: btnW, height: btnH))
+            b.title = title
+            b.toolTip = tip
+            b.target = self
+            b.action = action
+            return b
+        }
+        v.addSubview(actionRow(starY, "⭐️  Star on GitHub",
+                               "A star helps others find it", #selector(openRepo)))
+        v.addSubview(actionRow(kofiY, "☕  Buy me a coffee",
+                               "Tips keep it going", #selector(openCoffee)))
+        v.addSubview(actionRow(bugY, "🐞  Report a bug",
+                               "Bug reports make it better", #selector(openIssues)))
 
         let vc = NSViewController()
         vc.view = v
