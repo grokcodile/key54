@@ -12,6 +12,10 @@
 
 It runs as a background agent — no Dock icon, no menu bar item — and starts at login.
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Key54 — hold the right Command key to summon your app, hold again to switch back" width="680" />
+</p>
+
 <p>
   <a href="https://key54.app"><img src="https://img.shields.io/badge/Website%20%26%20more%20info%20%E2%86%92-key54.app-0071e3?style=for-the-badge" alt="Website & more info"></a>
 </p>
@@ -156,3 +160,7 @@ This app uses a global event tap and controls other applications, which is incom
 ## License
 
 Released under the [MIT License](LICENSE).
+
+## Author
+
+Built by **Ethan Darling** — [@grokcodile](https://github.com/grokcodile) on GitHub · [u/grokcodile](https://www.reddit.com/user/grokcodile) on Reddit · [LinkedIn](https://www.linkedin.com/in/ethandarling/). Feedback and bug reports welcome: [key54@ethans.email](mailto:key54@ethans.email).
