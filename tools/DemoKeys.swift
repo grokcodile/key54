@@ -92,6 +92,16 @@ final class KeycapLayer: CALayer {
         }
     }
 
+    // Core Animation instantiates a copy of any CALayer subclass via init(layer:)
+    // when it builds the presentation layer for an implicit animation — and
+    // setPressed() animates inside a CATransaction. Without this override the
+    // runtime traps ("Use of unimplemented initializer 'init(layer:)'") the first
+    // time any key is highlighted.
+    override init(layer: Any) {
+        isRightCommand = (layer as? KeycapLayer)?.isRightCommand ?? false
+        super.init(layer: layer)
+    }
+
     required init?(coder: NSCoder) { fatalError() }
 
     func setPressed(_ pressed: Bool) {
