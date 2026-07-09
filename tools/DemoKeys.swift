@@ -7,7 +7,10 @@
 // show (it doesn't distinguish left/right modifiers).
 //
 // Build:  swiftc -O tools/DemoKeys.swift -o build/DemoKeys
-// Run:    ./build/DemoKeys [scale]        (scale defaults to 1.0; try 1.3 for 4K)
+// Run:    ./build/DemoKeys [scale] [top|bottom]
+//           scale defaults to 1.0 (try 1.3 for 4K).
+//           position defaults to "top" so the row clears Key54's own HUD,
+//           which sits at bottom-center. Pass "bottom" to force the old spot.
 // Quit:   Ctrl+C in the terminal that launched it.
 //
 // Needs Accessibility permission (listen-only CGEventTap, same as Key54). When
@@ -17,6 +20,11 @@ import Cocoa
 
 let scale: CGFloat = CommandLine.arguments.count > 1
     ? CGFloat(Double(CommandLine.arguments[1]) ?? 1.0) : 1.0
+
+// Key54's HUD lives at bottom-center, so the key row defaults to the top edge
+// (just under the menu bar) to stay out of its way. Pass "bottom" to override.
+let atTop: Bool = !(CommandLine.arguments.count > 2
+    && CommandLine.arguments[2].lowercased() == "bottom")
 
 // MARK: - Palette (matches key54.app)
 
@@ -150,7 +158,9 @@ final class Overlay {
         let totalH = keyH + pad * 2
 
         let sf = screen.frame
-        let rect = NSRect(x: sf.midX - totalW / 2, y: sf.minY + 64 * scale,
+        let vf = screen.visibleFrame   // excludes the menu bar
+        let y = atTop ? vf.maxY - totalH - 12 * scale : sf.minY + 64 * scale
+        let rect = NSRect(x: sf.midX - totalW / 2, y: y,
                           width: totalW, height: totalH)
 
         panel = NSPanel(contentRect: rect,
