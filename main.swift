@@ -193,13 +193,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         postKeystroke(keyCode: CGKeyCode(kVK_Space), flags: .maskCommand)
         // Gap before the ⌘4. Spotlight buffers keystrokes queued behind the
-        // ⌘Space that opened it — empirically even a 1 ms gap works — so the
-        // default is a token 20 ms cushion for slower machines and cold
-        // starts. If the 4 ever does outrun Spotlight it lands in the
-        // frontmost app instead. Hidden override, in seconds:
+        // ⌘Space that opened it, so a tiny gap usually suffices — but a 1 ms
+        // gap was observed to miss intermittently (the 4 outruns Spotlight
+        // and lands in the frontmost app instead), so keep a 30 ms cushion:
+        // still imperceptible, survives the cold-start case. Hidden
+        // override, in seconds:
         //   defaults write com.ethan.key54 clipboardHotkeyDelay -float 0.1
         let gap = (UserDefaults.standard.object(forKey: "clipboardHotkeyDelay")
-                   as? Double).map { min(max($0, 0), 1) } ?? 0.02
+                   as? Double).map { min(max($0, 0), 1) } ?? 0.03
         DispatchQueue.main.asyncAfter(deadline: .now() + gap) { [weak self] in
             self?.postKeystroke(keyCode: CGKeyCode(kVK_ANSI_4), flags: .maskCommand)
         }
