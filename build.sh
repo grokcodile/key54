@@ -38,6 +38,7 @@ cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
 swiftc -O main.swift \
     -target "$(uname -m)-apple-macos13.0" \
     -framework Cocoa \
+    -framework Carbon \
     -framework ServiceManagement \
     -o "${BUILD_DIR}/Contents/MacOS/${APP_NAME}"
 
