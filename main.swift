@@ -1,5 +1,4 @@
 import Cocoa
-import Carbon.HIToolbox
 import ServiceManagement
 
 // MARK: - App Delegate
@@ -91,11 +90,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Start observing the right-⌘ key and tracking Accessibility state.
         startMonitoring()
 
-        // Hidden ⌘⇧V → Spotlight clipboard hotkey (see syncClipboardHotkey).
-        syncClipboardHotkey()
-        UserDefaults.standard.addObserver(self, forKeyPath: "clipboardHotkey",
-                                          options: [], context: nil)
-
         // Build the HUD overlay now, while we're (almost always) on a normal
         // Space, so it can appear over full-screen Spaces the user enters later.
         // Creating it lazily on the first trigger risks that first trigger landing
@@ -129,104 +123,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } else {
             try? SMAppService.mainApp.unregister()
-        }
-    }
-
-    // MARK: Hidden clipboard hotkey
-
-    // Hidden feature (no UI): map ⌘⇧V to the Spotlight clipboard on macOS 26+.
-    // Opt in with:  defaults write com.ethan.key54 clipboardHotkey -bool YES
-    // Captured via Carbon's RegisterEventHotKey rather than the event tap: it
-    // consumes the combo system-wide (so apps never see their own ⌘⇧V, which
-    // is usually Paste and Match Style) and leaves the listen-only tap intact.
-    private var clipboardHotKey: EventHotKeyRef?
-    private var clipboardHotKeyHandler: EventHandlerRef?
-
-    func syncClipboardHotkey() {
-        // Spotlight's clipboard view exists on macOS 26+ only. Requiring
-        // Accessibility too (see syncAccessibility) keeps the hotkey from
-        // eating ⌘⇧V while the synthesis it exists for can't be delivered.
-        guard ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 else { return }
-        let wanted = UserDefaults.standard.bool(forKey: "clipboardHotkey") && hasAccessibility
-        if wanted && clipboardHotKey == nil {
-            if clipboardHotKeyHandler == nil {
-                var pressed = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
-                                            eventKind: UInt32(kEventHotKeyPressed))
-                InstallEventHandler(GetEventDispatcherTarget(), { _, _, userInfo -> OSStatus in
-                    Unmanaged<AppDelegate>.fromOpaque(userInfo!).takeUnretainedValue()
-                        .openSpotlightClipboard()
-                    return noErr
-                }, 1, &pressed, Unmanaged.passUnretained(self).toOpaque(), &clipboardHotKeyHandler)
-            }
-            let id = EventHotKeyID(signature: OSType(0x4B_59_35_34) /* 'KY54' */, id: 1)
-            RegisterEventHotKey(UInt32(kVK_ANSI_V), UInt32(cmdKey | shiftKey), id,
-                                GetEventDispatcherTarget(), 0, &clipboardHotKey)
-        } else if !wanted, let hk = clipboardHotKey {
-            UnregisterEventHotKey(hk)
-            clipboardHotKey = nil
-        }
-    }
-
-    /// Spotlight has no API or settable shortcut for its clipboard view, so
-    /// synthesize the documented gesture: ⌘Space (Spotlight), then ⌘4
-    /// (clipboard view) — Spotlight accepts ⌘4 essentially immediately, the
-    /// same way a human holds ⌘ and taps Space then 4, so only a small gap is
-    /// needed. Assumes Spotlight is on its default ⌘Space shortcut; there is
-    /// no reliable way to confirm the panel opened (Spotlight never becomes
-    /// the frontmost app, and the window list needs Screen Recording), so a
-    /// remapped ⌘Space means the ⌘4 lands in the frontmost app. Documented
-    /// trade-off for an opt-in easter egg.
-    private func openSpotlightClipboard(attempt: Int = 0) {
-        guard hasAccessibility else { return }   // can't post; don't try
-        // The user is still physically holding ⌘⇧ from the hotkey press. A
-        // held shift would corrupt the sequence (⌘⇧Space, and ⌘⇧4 is the
-        // screenshot shortcut) — wait for shift release before posting, then
-        // give up quietly if it's still down after ~600 ms.
-        let shiftDown = CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_Shift))
-            || CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_RightShift))
-        if shiftDown {
-            guard attempt < 24 else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.025) { [weak self] in
-                self?.openSpotlightClipboard(attempt: attempt + 1)
-            }
-            return
-        }
-        postKeystroke(keyCode: CGKeyCode(kVK_Space), flags: .maskCommand)
-        // Gap before the ⌘4. Spotlight buffers keystrokes queued behind the
-        // ⌘Space that opened it, so a tiny gap usually suffices — but a 1 ms
-        // gap was observed to miss intermittently (the 4 outruns Spotlight
-        // and lands in the frontmost app instead), so keep a 30 ms cushion:
-        // still imperceptible, survives the cold-start case. Hidden
-        // override, in seconds:
-        //   defaults write com.ethan.key54 clipboardHotkeyDelay -float 0.1
-        let gap = (UserDefaults.standard.object(forKey: "clipboardHotkeyDelay")
-                   as? Double).map { min(max($0, 0), 1) } ?? 0.03
-        DispatchQueue.main.asyncAfter(deadline: .now() + gap) { [weak self] in
-            self?.postKeystroke(keyCode: CGKeyCode(kVK_ANSI_4), flags: .maskCommand)
-        }
-    }
-
-    private func postKeystroke(keyCode: CGKeyCode, flags: CGEventFlags) {
-        let source = CGEventSource(stateID: .hidSystemState)
-        for keyDown in [true, false] {
-            guard let e = CGEvent(keyboardEventSource: source, virtualKey: keyCode,
-                                  keyDown: keyDown) else { continue }
-            e.flags = flags
-            e.post(tap: .cghidEventTap)
-        }
-    }
-
-    // Pick up `defaults write` toggles from outside the app without a relaunch.
-    // UserDefaults KVO observes external changes; NSObject routes it here.
-    override func observeValue(forKeyPath keyPath: String?, of object: Any?,
-                               change: [NSKeyValueChangeKey: Any]?,
-                               context: UnsafeMutableRawPointer?) {
-        if keyPath == "clipboardHotkey" {
-            // External `defaults write` changes can deliver KVO off the main
-            // thread; the Carbon register/unregister belongs on main.
-            DispatchQueue.main.async { [weak self] in self?.syncClipboardHotkey() }
-        } else {
-            super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
         }
     }
 
@@ -452,11 +348,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             awaitingAccessibility = !trusted
             settingsWindow?.refreshAxBanner()
         }
-        // The clipboard hotkey needs posting rights (Accessibility): a hotkey
-        // registered while untrusted would still swallow ⌘⇧V system-wide but
-        // the synthesized keystrokes would be silently discarded — the combo
-        // would just die in every app. Keep its lifetime tied to the tap's.
-        syncClipboardHotkey()
     }
 
     /// Build the listen-only tap and run it on a dedicated thread. A listen-only
@@ -1556,13 +1447,8 @@ class SettingsWindow: NSWindow {
         let bodyH = ceil(body.sizeThatFits(
             NSSize(width: bodyW, height: .greatestFiniteMagnitude)).height)
 
-        // Stack, bottom up: (optional clipboard-hotkey toggle,) three
-        // pitch-as-button rows, body, greeting, headshot. The toggle only
-        // exists where Spotlight has a clipboard view (macOS 26+).
-        let showClipToggle = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
-        let clipH: CGFloat = showClipToggle ? 22 : 0
-        let clipGap: CGFloat = showClipToggle ? 8 : 0
-        let bugY = pad + clipH + clipGap
+        // Stack, bottom up: three pitch-as-button rows, body, greeting, headshot.
+        let bugY = pad
         let kofiY = bugY + btnH + btnGap
         let starY = kofiY + btnH + btnGap
         let bodyY = starY + btnH + 12
@@ -1617,22 +1503,6 @@ class SettingsWindow: NSWindow {
         v.addSubview(actionRow(bugY, "🐞  Report a bug",
                                "Bug reports make it better", #selector(openIssues)))
 
-        // Bonus-feature toggle, tucked beneath the support rows: ⌘⇧V pops
-        // open Spotlight's clipboard history. Writes the `clipboardHotkey`
-        // default; AppDelegate's KVO picks it up and (un)registers the hotkey.
-        if showClipToggle {
-            let clip = NSButton(checkboxWithTitle: "⌘⇧V opens Clipboard History",
-                                target: self, action: #selector(toggleClipboardHotkey(_:)))
-            clip.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-            clip.state = UserDefaults.standard.bool(forKey: "clipboardHotkey") ? .on : .off
-            clip.toolTip = "Bonus: press ⌘⇧V anywhere to pop open Spotlight's clipboard. "
-                + "While on, it replaces Paste and Match Style."
-            clip.sizeToFit()
-            clip.frame.origin = NSPoint(x: (w - clip.frame.width) / 2,
-                                        y: pad + (clipH - clip.frame.height) / 2)
-            v.addSubview(clip)
-        }
-
         let vc = NSViewController()
         vc.view = v
         let pop = NSPopover()
@@ -1645,11 +1515,6 @@ class SettingsWindow: NSWindow {
 
     @objc private func openIssues() {
         NSWorkspace.shared.open(URL(string: "https://github.com/grokcodile/key54/issues/new")!)
-    }
-
-    @objc private func toggleClipboardHotkey(_ sender: NSButton) {
-        UserDefaults.standard.set(sender.state == .on, forKey: "clipboardHotkey")
-        // AppDelegate observes this key (KVO) and syncs the Carbon hotkey.
     }
 }
 
