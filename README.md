@@ -63,7 +63,7 @@ Works on any Mac (including Intel):
 bash install.sh
 ```
 
-This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc code-signs, installs to `/Applications/Key54.app`, and launches it. An ad-hoc build isn't notarized, so its first launch shows the "unidentified developer" warning — clear it once by right-clicking **Key54 → Open**.
+This compiles `main.swift`, generates the app icon (`make_icon.swift`), code-signs, installs to `/Applications/Key54.app`, and launches it. Signing uses the first "Developer ID Application" identity in your keychain, falling back to an ad-hoc signature if there isn't one. An ad-hoc build isn't notarized, so its first launch shows the "unidentified developer" warning — clear it once by right-clicking **Key54 → Open** — and because an ad-hoc signature has no stable identity, macOS re-asks for Accessibility after every reinstall.
 
 > Optional: install [`pngquant`](https://pngquant.org) to shrink the generated icon.
 
@@ -76,7 +76,7 @@ This compiles `main.swift`, generates the app icon (`make_icon.swift`), ad-hoc c
 ## First run
 
 1. Launch **Key54** from `Applications`. Its window opens.
-2. Grant **Accessibility** permission when prompted — System Settings → Privacy & Security → Accessibility → enable Key54. This lets it detect the right Command key.
+2. Grant **Accessibility** when macOS asks on first launch — that's what lets Key54 detect the right Command key. If you dismiss the prompt, the **System Permissions** readout under the switch shows Accessibility in red; click it to ask again, or turn Key54 on yourself under System Settings → Privacy & Security → Accessibility.
 3. Click **Change Application…** and pick the app you want bound to the right ⌘ key.
 4. Optionally pick a **Hold Duration** preset (how long you hold before it triggers) — or choose **Custom** and dial in your own timings — and an **Animation Style** (Power Up or Level Up).
 5. Click **Done**. Key54 keeps running in the background (and starts automatically at login).

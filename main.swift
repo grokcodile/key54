@@ -62,18 +62,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateStarting = false             // guards against a double Update click
     private var updateTimer: Timer?
     let dmgURL = "https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
-    /// Installed via the Homebrew cask? Its metadata lives in the Caskroom.
+    /// Installed via the Homebrew cask? Its metadata lives in the Caskroom — but
+    /// the Caskroom existing only says *a* Homebrew copy is around, not that it's
+    /// the one running. A build launched from anywhere but /Applications is a dev
+    /// build, and handing it to `brew upgrade` would overwrite the /Applications
+    /// copy (a different app) and then reopen this one — clobbering an install and
+    /// resetting its Accessibility grant for nothing.
     lazy var isHomebrewManaged: Bool = {
         let fm = FileManager.default
-        return fm.fileExists(atPath: "/opt/homebrew/Caskroom/key54")
-            || fm.fileExists(atPath: "/usr/local/Caskroom/key54")
+        let caskroom = fm.fileExists(atPath: "/opt/homebrew/Caskroom/key54")
+                    || fm.fileExists(atPath: "/usr/local/Caskroom/key54")
+        return caskroom && Bundle.main.bundlePath == "/Applications/Key54.app"
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        // Show tooltips (the bare Tip Jar emoji's hint) after a brief delay,
-        // rather than the long system default.
+        // Show tooltips after a brief delay rather than the long system default:
+        // the titlebar ⓘ and every row in its About popover explain themselves
+        // through one, so a slow hint is a hint nobody reads.
         UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 150])
 
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -314,9 +321,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         selectedPreset == 4 ? customAnimationLength : SettingsWindow.animationLengthValues[selectedPreset]
     }
 
+    /// Fire the real macOS Accessibility request. The system puts up its own
+    /// "…would like to control this computer" alert, which is the only thing that
+    /// can add Key54 to the list — an app can't add itself, which is why the old
+    /// hand-written "open Settings, find Key54, turn it on" steps existed.
+    func promptForAccessibility() {
+        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+    }
+
     /// Begin observing the right-⌘ key and the Accessibility permission state.
     private func startMonitoring() {
         syncAccessibility()
+
+        // First launch without permission: let macOS ask, once. The poll below
+        // would otherwise re-prompt every second.
+        if !AXIsProcessTrusted() { promptForAccessibility() }
 
         // Poll for grant/revoke so the settings warning and the tap stay in sync.
         // A listen-only tap can't wedge input, so this is pure bookkeeping — and
@@ -645,33 +664,6 @@ class LinkButton: NSButton {
     }
 }
 
-/// A flat, pill-shaped button with a translucent white fill that brightens on
-/// hover (and shows the pointing-hand cursor via LinkButton).
-final class HoverButton: LinkButton {
-    private var tracking: NSTrackingArea?
-    private let restColor = NSColor(white: 1, alpha: 0.07).cgColor
-    private let hoverColor = NSColor(white: 1, alpha: 0.20).cgColor
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        isBordered = false
-        wantsLayer = true
-        layer?.cornerRadius = 8
-        layer?.backgroundColor = restColor
-    }
-    required init?(coder: NSCoder) { super.init(coder: coder) }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let t = tracking { removeTrackingArea(t) }
-        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
-        addTrackingArea(area)
-        tracking = area
-    }
-    override func mouseEntered(with event: NSEvent) { layer?.backgroundColor = hoverColor }
-    override func mouseExited(with event: NSEvent) { layer?.backgroundColor = restColor }
-}
-
 /// A small static HUD glyph that represents an Animation Style next to its radio
 /// button: a ¾-filled Power Up ring, or a ¾-filled Level Up glass.
 final class StyleGlyph: NSView {
@@ -777,11 +769,20 @@ final class StylePill: NSView {
 
 class SettingsWindow: NSWindow {
     weak var appDelegate: AppDelegate?
-    private var tipPopover: NSPopover?
+    private var infoPopover: NSPopover?
+    private var infoButton: NSButton?           // titlebar ⓘ, installed once
     private var stylePills: [StylePill] = []   // the two Animation Style buttons
     private let contentW: CGFloat = 460
     private let pad: CGFloat = 32
+    /// One centered content column. Everything that isn't full-bleed centered text
+    /// — the description, both boxes, the slider, the button row — is this wide, so
+    /// the window reads as a single column instead of the 320/350/360 near-misses
+    /// it used to be.
+    private let columnW: CGFloat = 340
+    private var columnX: CGFloat { ((contentW - columnW) / 2).rounded() }
+    private let cardPad: CGFloat = 14     // inset from a box's edge to its contents
     static let footerH: CGFloat = 36                 // blue update-notice strip
+    static let pillH: CGFloat = 22                   // system-permissions readout
     private weak var footerStatus: NSTextField?
     private weak var footerButton: NSButton?
 
@@ -812,9 +813,43 @@ class SettingsWindow: NSWindow {
         self.isReleasedWhenClosed = false
         self.isRestorable = false
         rebuild()
+        installTitlebarInfoButton()
         self.center()
         // Permission changes reach us via the AppDelegate (its poll + notification
         // observer call refreshAxBanner on a state flip) — no observer of our own.
+    }
+
+    /// About: an ⓘ tucked into the top-right of the titlebar, mirroring the
+    /// traffic lights on the left.
+    ///
+    /// A titlebar accessory rather than a subview of the content: `rebuild()`
+    /// replaces the content view wholesale, and on a screen small enough to clamp
+    /// the window that content is inside a scroll view — a button living there
+    /// would scroll away with everything else. The accessory is installed once and
+    /// survives every rebuild. NSControl isn't part of the titlebar's drag region,
+    /// so the click still registers; LinkButton supplies the pointing hand.
+    private func installTitlebarInfoButton() {
+        guard infoButton == nil else { return }
+        let titlebarH: CGFloat = 28, size: CGFloat = 22
+        let btn = LinkButton(title: "", target: self, action: #selector(openAbout(_:)))
+        btn.isBordered = false
+        btn.imagePosition = .imageOnly
+        btn.contentTintColor = .secondaryLabelColor
+        btn.image = NSImage(systemSymbolName: "info.circle",
+                            accessibilityDescription: "About Key54")?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+        btn.toolTip = "About Key54"
+        btn.frame = NSRect(x: 0, y: ((titlebarH - size) / 2).rounded(), width: size, height: size)
+
+        // Host width sets the trailing inset: the glyph centre lands 17 pt from the
+        // window's right edge, mirroring the traffic lights on the left.
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 28, height: titlebarH))
+        host.addSubview(btn)
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.layoutAttribute = .right
+        accessory.view = host
+        addTitlebarAccessoryViewController(accessory)
+        infoButton = btn
     }
 
     // MARK: - Layout
@@ -822,19 +857,21 @@ class SettingsWindow: NSWindow {
     private func rebuild() {
         let hasPermission = appDelegate?.hasAccessibility ?? AXIsProcessTrusted()
         let enabled = appDelegate?.appEnabled ?? true
-        let switchOn = hasPermission && enabled          // the app is actually on
-        let showSwitch = hasPermission                   // switch + description hidden until permission is granted
-        let showWarning = !hasPermission                 // permission notice replaces switch + controls
-        let showControls = switchOn                      // app picker / timing / animation
+        // The switch and the controls answer to the user's on/off choice alone.
+        // Permission is reported by the pill under the description and granted
+        // through the system's own prompt, so a missing one no longer hides the
+        // window's contents behind a wall of instructions.
+        let switchOn = enabled
+        let showControls = enabled                       // app picker / timing / animation
         let showsCustom = showControls && appDelegate?.selectedPreset == 4
         // The dark footer strip only exists when there's an update to announce;
         // otherwise it isn't shown at all.
         let showFooter = (appDelegate?.updateState ?? .upToDate) != .upToDate
         let innerW = contentW - pad * 2
 
-        // Description under the switch (shown only once permission is granted):
-        // the normal usage hint, or the "turned off" message.
-        let descW: CGFloat = 350
+        // Description under the switch: the normal usage hint, or the "turned
+        // off" message.
+        let descW: CGFloat = 340
         let descPara = NSMutableParagraphStyle()
         descPara.alignment = .center
         descPara.paragraphSpacing = 10
@@ -866,87 +903,111 @@ class SettingsWindow: NSWindow {
             with: NSSize(width: descW, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]).height) + 2
 
-        // Permission warning contents (only when permission is missing): a heading,
-        // the explanatory line, and the button — all inside one box.
-        let warnInnerW = innerW - 32
-        let warnPara = NSMutableParagraphStyle()
-        warnPara.alignment = .center
-        let warnStr = NSAttributedString(
-            string: "Key54 needs to watch the Command (⌘) key on the right side of your keyboard to control how it opens apps.",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: warnPara,
-            ])
-        let warnBodyH = ceil(warnStr.boundingRect(
-            with: NSSize(width: warnInnerW, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading]).height)
-        // Simple step-by-step for granting the permission (left-aligned list).
-        let stepsPara = NSMutableParagraphStyle()
-        stepsPara.alignment = .center
-        stepsPara.lineSpacing = 3
-        stepsPara.paragraphSpacing = 12
-        // One centered step per line ("N ❯ text"); paragraphSpacing gives the gap.
-        let warnStepsStr = NSAttributedString(
-            string: "1 ❯ Click the button below to open System Settings.\n2 ❯ Find Key54 in the list and turn it on.\n3 ❯ Return to this window.",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: stepsPara,
-            ])
-        let warnStepsW = warnInnerW
-        let warnStepsH = ceil(warnStepsStr.boundingRect(
-            with: NSSize(width: warnStepsW, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading]).height)
-        let warnPadV: CGFloat = 16, warnHeadingH: CGFloat = 20, warnHeadGap: CGFloat = 8
-        let warnBodyStepsGap: CGFloat = 12, warnStepsBtnGap: CGFloat = 14, warnBtnH: CGFloat = 26
-        let warningBoxH = warnPadV + warnHeadingH + warnHeadGap + warnBodyH
-                        + warnBodyStepsGap + warnStepsH + warnStepsBtnGap + warnBtnH + warnPadV
-
         // Fixed vertical metrics (top → bottom). The content view runs under
         // the transparent titlebar, so the top margin includes its height.
-        let topMargin: CGFloat = 56
+        //
+        // These are tuned as tight as the design takes, because the window has to
+        // fit a small MacBook: 800 pt on a 13" Pro (~700 with the Dock out), 720 on
+        // a 12". Loosening any of them walks back toward the clamp-and-scroll
+        // fallback in `rebuild()`, which is a last resort, not a design.
+        // 28 pt of this is the titlebar the content runs under, so the title block
+        // starts 14 pt below the traffic lights — close to the top but still clear
+        // of them. `titleH` stays 36 to keep the 28 pt title itself unchanged.
+        let topMargin: CGFloat = 42
         let titleH: CGFloat = 36
-        let titleSwitchGap: CGFloat = 10
+        let titleSwitchGap: CGFloat = 8
         let switchRowH: CGFloat = 28
         let chooseH: CGFloat = 32
-        let sliderBlockH: CGFloat = 68  // caption + slider + tick labels
+        let captionH: CGFloat = 18      // a section's "Hold Duration" style caption
+        let captionGap: CGFloat = 10    // caption → the control it labels
+        let tickH: CGFloat = 13         // the slider's stop labels
+        // Blocks must be tall enough to hold their own contents: the tick labels
+        // used to hang 3 pt below the slider block, quietly eating into the gap
+        // under it so that section sat closer than every other.
+        let sliderBlockH = tickH + 6 + 22 + captionGap + captionH
         // The style selector only matters when there's a charge to visualize, so
         // it's hidden for Instant/Short (preset < 2 — no charge animation).
         let showsAnimationStyle = showControls && (appDelegate?.selectedPreset ?? 2) >= 2
-        let animationStyleBlockH: CGFloat = 68   // caption + a row of two selectable pills
-        let customBlockH: CGFloat = showsCustom ? 132 : 0   // Custom timing sub-panel
-        let bottomBarH: CGFloat = 64    // button row + bottom margin
-        let unitGap: CGFloat = 26       // gap between the switch and the description
-        let sectionGap: CGFloat = 28    // between sections — the layout's rhythm
+        let stylePillH: CGFloat = 40    // StylePill: 26 pt glyph + 7 pt above and below
+        let animationStyleBlockH = stylePillH + captionGap + captionH
+        // Custom timing sub-panel: a 110 pt box (two 40 pt rows, 6 pt apart, 12 pt
+        // padding) plus the 12 pt gap that separates it from the tick labels above.
+        let customRowH: CGFloat = 40, customRowGap: CGFloat = 6
+        let customBoxH = cardPad + customRowH + customRowGap + customRowH + cardPad
+        let customBoxGap: CGFloat = 12
+        let customBlockH: CGFloat = showsCustom ? customBoxH + customBoxGap : 0
+        let sectionGap: CGFloat = 22    // between sections — the layout's rhythm
+        let pillGap: CGFloat = 12       // switch → permission pill
+        let unitGap: CGFloat = 18       // permission pill → description
+        // The button row is spaced by the same sectionGap as everything else, so
+        // the strip below it is the window's whole bottom margin — matched to the
+        // clear space above the title.
+        let bottomMargin: CGFloat = 20
+        let btnH: CGFloat = 32
+        let bottomBarH = bottomMargin + btnH
 
-        // App-selection box (icon + name + change button) metrics
-        let iconH: CGFloat = 48
+        // App-selection tile — narrower than the content column, so it reads as a
+        // compact card echoing the HUD's slab instead of a full-width band. Its
+        // width is the wider of the button and the app's name, both measured here
+        // rather than hardcoded, so a long name widens the card and the button
+        // with it instead of truncating. Capped at the content column: past that
+        // the card would be a full-width band again, and the name truncates.
+        // Height stays content-driven — squaring it off wasted ~60 pt for nothing.
+        let appName = appDelegate?.targetAppURL().deletingPathExtension().lastPathComponent ?? ""
+        // Measured off the real field, not the raw glyph run — an NSTextField cell
+        // adds its own insets, and sizing the card to the bare string width made the
+        // name truncate at exactly its own width.
+        let nameField = NSTextField(labelWithString: appName)
+        nameField.font = .systemFont(ofSize: 15, weight: .medium)
+        nameField.alignment = .center
+        nameField.lineBreakMode = .byTruncatingTail
+        nameField.tag = 12
+        nameField.sizeToFit()
+        let nameW = ceil(nameField.frame.width)
+        let chooseBtn = NSButton(title: "Change Application…", target: self,
+                                 action: #selector(chooseApp))
+        chooseBtn.bezelStyle = .rounded
+        chooseBtn.sizeToFit()
+        let chooseNaturalW = ceil(chooseBtn.frame.width) + 24
+        let iconH: CGFloat = 44
         let nameH: CGFloat = 22
-        let boxPadV: CGFloat = 16
-        let iconNameGap: CGFloat = 6
-        let nameButtonGap: CGFloat = 14
-        let appBoxH = boxPadV + iconH + iconNameGap + nameH + nameButtonGap + chooseH + boxPadV
+        let iconNameGap: CGFloat = 4
+        let nameButtonGap: CGFloat = 12
+        let appBoxH = cardPad + iconH + iconNameGap + nameH + nameButtonGap + chooseH + cardPad
+        let appBoxW = min(columnW, (max(chooseNaturalW, nameW) + cardPad * 2).rounded())
+        let chooseW = appBoxW - cardPad * 2       // the button fills the card
 
-        // Switch + its description appear together (only with permission); the
-        // warning replaces them when permission is missing.
-        let switchBlock = showSwitch ? (titleSwitchGap + switchRowH + unitGap + descH) : 0
-        let warningBlock = showWarning ? (sectionGap + warningBoxH) : 0
+        // Switch, the permission readout, then the description — all unconditional.
+        // The pill sits directly under the switch because it reports the same kind
+        // of thing (is Key54 actually live?); below the description it read as an
+        // afterthought stranded between two sections.
+        let switchBlock = titleSwitchGap + switchRowH + pillGap + Self.pillH + unitGap + descH
         // The functional controls (app picker, timing, animation) only show when on.
         let enabledBody = sectionGap + appBoxH + sectionGap + sliderBlockH + customBlockH
                         + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
-        let totalH = topMargin + titleH + switchBlock + warningBlock
+        let totalH = topMargin + titleH + switchBlock
                    + (showControls ? enabledBody : 0)
                    + sectionGap + bottomBarH + (showFooter ? Self.footerH : 0)
 
-        setContentSize(NSSize(width: contentW, height: totalH))
+        // Never taller than the screen can show. At full extension — Custom timing
+        // panel plus the update footer — the content wants ~870 pt, but a 13"
+        // MacBook Pro is 800 pt tall (~700 once the Dock is out) and the 12"
+        // MacBook only 720. Whatever doesn't fit scrolls; when it all fits, the
+        // scroll view never appears and nothing looks any different.
+        let visibleH = (screen ?? NSScreen.main)?.visibleFrame.height ?? totalH
+        let needsScroll = totalH > visibleH
+        let windowH = min(totalH, visibleH)
+        // A legacy (always-visible) scroller takes real width. Widen the window by
+        // exactly that much rather than letting it eat into the content, so the
+        // centered column stays where it is and nothing shifts.
+        let scrollerW: CGFloat = needsScroll
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
+        setContentSize(NSSize(width: contentW + scrollerW, height: windowH))
 
-        // Fresh content view — a behind-window material so the whole window
-        // (titlebar included) reads as one translucent system surface.
-        let c = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: contentW, height: totalH))
-        c.material = .underWindowBackground
-        c.blendingMode = .behindWindow
-        c.state = .followsWindowActiveState
+        // Fresh content view — plain, so the window's own opaque background shows
+        // through and the whole surface (titlebar included) reads as one solid
+        // panel rather than a translucent one.
+        let c = NSView(frame: NSRect(x: 0, y: 0, width: contentW, height: totalH))
         var y = totalH - topMargin
 
         // Title
@@ -957,10 +1018,8 @@ class SettingsWindow: NSWindow {
         titleLabel.alignment = .center
         c.addSubview(titleLabel)
 
-        // Enable / Disable master switch + its description — shown only once
-        // permission is granted. Without permission these are replaced by the
-        // warning below.
-        if showSwitch {
+        // Enable / Disable master switch + its description.
+        do {
             y -= titleSwitchGap + switchRowH
             let sw = NSSwitch()
             sw.state = switchOn ? .on : .off
@@ -980,6 +1039,10 @@ class SettingsWindow: NSWindow {
             sw.frame = NSRect(x: groupX + capW + swGap, y: y + (switchRowH - swH) / 2, width: swW, height: swH)
             c.addSubview(sw)
 
+            // Permission readout — always present, green or red.
+            y -= pillGap + Self.pillH
+            addPermissionPill(hasAX: hasPermission, rowY: y, in: c)
+
             y -= unitGap + descH
             let desc = NSTextField(labelWithAttributedString: descStr)
             desc.frame = NSRect(x: (contentW - descW) / 2, y: y, width: descW, height: descH)
@@ -990,52 +1053,11 @@ class SettingsWindow: NSWindow {
             c.addSubview(desc)
         }
 
-        // Accessibility permission warning — replaces the switch + controls until
-        // permission is granted. One box holding the heading, explanation, button.
-        if showWarning {
-            y -= sectionGap + warningBoxH
-            let box = NSBox(frame: NSRect(x: pad, y: y, width: innerW, height: warningBoxH))
-            box.boxType = .custom
-            box.fillColor = NSColor.systemOrange.withAlphaComponent(0.12)
-            box.borderColor = NSColor.systemOrange.withAlphaComponent(0.45)
-            box.borderWidth = 1; box.cornerRadius = 10; box.titlePosition = .noTitle
-            box.contentViewMargins = .zero
-            c.addSubview(box)
-
-            let msg = NSTextField(labelWithString: "Accessibility Permission Required")
-            msg.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-            msg.textColor = .systemOrange
-            msg.alignment = .center
-            msg.frame = NSRect(x: 16, y: warningBoxH - warnPadV - warnHeadingH, width: warnInnerW, height: warnHeadingH)
-            box.addSubview(msg)
-
-            let warnBody = NSTextField(labelWithAttributedString: warnStr)
-            warnBody.alignment = .center
-            warnBody.maximumNumberOfLines = 0
-            warnBody.frame = NSRect(x: 16, y: warningBoxH - warnPadV - warnHeadingH - warnHeadGap - warnBodyH,
-                                    width: warnInnerW, height: warnBodyH)
-            box.addSubview(warnBody)
-
-            let steps = NSTextField(labelWithAttributedString: warnStepsStr)
-            steps.maximumNumberOfLines = 0
-            steps.frame = NSRect(x: (innerW - warnStepsW) / 2,
-                                 y: warningBoxH - warnPadV - warnHeadingH - warnHeadGap - warnBodyH
-                                    - warnBodyStepsGap - warnStepsH,
-                                 width: warnStepsW, height: warnStepsH)
-            box.addSubview(steps)
-
-            let btn = NSButton(title: "Open Privacy & Security Settings", target: self,
-                               action: #selector(openAxSettings))
-            btn.bezelStyle = .rounded
-            btn.frame = NSRect(x: (innerW - 260) / 2, y: warnPadV, width: 260, height: warnBtnH)
-            box.addSubview(btn)
-        }
-
         if showControls {
-        // App-selection section — icon + name + change button inside a gray box
+        // App-selection tile — icon + name + change button in a narrow card.
         y -= sectionGap + appBoxH
-        let boxW: CGFloat = 320
-        let boxX = (contentW - boxW) / 2
+        let boxW = appBoxW
+        let boxX = ((contentW - boxW) / 2).rounded()
 
         let appBox = NSBox(frame: NSRect(x: boxX, y: y, width: boxW, height: appBoxH))
         appBox.boxType = .custom
@@ -1046,40 +1068,35 @@ class SettingsWindow: NSWindow {
         appBox.titlePosition = .noTitle
         c.addSubview(appBox)
 
-        let cIcon = iconH
-        let iconY = y + appBoxH - boxPadV - iconH
-        let cardIcon = NSImageView(frame: NSRect(x: boxX + (boxW - cIcon) / 2, y: iconY, width: cIcon, height: cIcon))
+        let iconY = y + appBoxH - cardPad - iconH
+        let cardIcon = NSImageView(frame: NSRect(x: boxX + (boxW - iconH) / 2, y: iconY,
+                                                 width: iconH, height: iconH))
         cardIcon.imageScaling = .scaleProportionallyUpOrDown
         cardIcon.tag = 11
         c.addSubview(cardIcon)
 
+        // The card is sized to this name, so it only truncates once a name is long
+        // enough to hit the column cap.
         let nameY = iconY - iconNameGap - nameH
-        let nameField = NSTextField(labelWithString: "")
-        nameField.frame = NSRect(x: boxX, y: nameY, width: boxW, height: nameH)
-        nameField.font = .systemFont(ofSize: 15, weight: .medium)
-        nameField.alignment = .center
-        nameField.tag = 12
+        nameField.frame = NSRect(x: boxX + cardPad, y: nameY, width: boxW - cardPad * 2, height: nameH)
         c.addSubview(nameField)
 
-        let chooseBtn = NSButton(title: "Change Application…", target: self, action: #selector(chooseApp))
-        chooseBtn.bezelStyle = .rounded
-        chooseBtn.sizeToFit()
-        let chooseW = chooseBtn.frame.width + 24
-        chooseBtn.frame = NSRect(x: boxX + (boxW - chooseW) / 2, y: y + boxPadV, width: chooseW, height: chooseH)
+        chooseBtn.frame = NSRect(x: boxX + cardPad, y: y + cardPad,
+                                 width: chooseW, height: chooseH)
         c.addSubview(chooseBtn)
 
         // Hold-duration: five discrete stops (Instant … Custom).
         y -= sectionGap + sliderBlockH
         let caption = NSTextField(labelWithString: "Hold Duration")
-        caption.frame = NSRect(x: pad, y: y + sliderBlockH - 20, width: innerW, height: 18)
+        caption.frame = NSRect(x: pad, y: y + sliderBlockH - captionH, width: innerW, height: captionH)
         caption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
         caption.textColor = .secondaryLabelColor
         caption.alignment = .center
         c.addSubview(caption)
 
-        let sliderW: CGFloat = 320
-        let sliderX = (contentW - sliderW) / 2
-        let sliderY = y + 16
+        let sliderW = columnW
+        let sliderX = columnX
+        let sliderY = y + tickH + 6
         let labels = SettingsWindow.holdDurationLabels
         let last = labels.count - 1
 
@@ -1103,7 +1120,7 @@ class SettingsWindow: NSWindow {
             lbl.alignment = .center
             let lw: CGFloat = 70
             let cx = trackLeft + (CGFloat(i) / CGFloat(last)) * trackW
-            lbl.frame = NSRect(x: cx - lw / 2, y: y - 3, width: lw, height: 13)
+            lbl.frame = NSRect(x: cx - lw / 2, y: y, width: lw, height: tickH)
             c.addSubview(lbl)
         }
 
@@ -1112,10 +1129,10 @@ class SettingsWindow: NSWindow {
         if showsCustom {
             y -= customBlockH
 
-            let cBoxW: CGFloat = 360
-            let cBoxX = (contentW - cBoxW) / 2
-            let cBoxH: CGFloat = 116
-            let cBoxTop = y + customBlockH - 16   // gap below the tick labels
+            let cBoxW = columnW
+            let cBoxX = columnX
+            let cBoxH = customBoxH
+            let cBoxTop = y + customBlockH - customBoxGap   // gap below the tick labels
 
             let box = NSBox(frame: NSRect(x: cBoxX, y: cBoxTop - cBoxH, width: cBoxW, height: cBoxH))
             box.boxType = .custom
@@ -1126,11 +1143,11 @@ class SettingsWindow: NSWindow {
             box.titlePosition = .noTitle
             c.addSubview(box)
 
-            let row1 = cBoxTop - 14
+            let row1 = cBoxTop - cardPad
             addCustomRow(to: c, top: row1, title: "Key Delay",
                          value: appDelegate?.customKeyDelay ?? 0.5,
                          sliderTag: 21, labelTag: 23)
-            addCustomRow(to: c, top: row1 - 48, title: "Animation Length",
+            addCustomRow(to: c, top: row1 - (customRowH + customRowGap), title: "Animation Length",
                          value: appDelegate?.customAnimationLength ?? 0.4,
                          sliderTag: 22, labelTag: 24)
         }
@@ -1140,7 +1157,7 @@ class SettingsWindow: NSWindow {
         if showsAnimationStyle {
             y -= sectionGap + animationStyleBlockH
             let styleCaption = NSTextField(labelWithString: "Animation Style")
-            styleCaption.frame = NSRect(x: pad, y: y + animationStyleBlockH - 20, width: innerW, height: 18)
+            styleCaption.frame = NSRect(x: pad, y: y + animationStyleBlockH - captionH, width: innerW, height: captionH)
             styleCaption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
             styleCaption.textColor = .secondaryLabelColor
             styleCaption.alignment = .center
@@ -1164,13 +1181,13 @@ class SettingsWindow: NSWindow {
         }   // if enabled
 
         // Bottom buttons. When Key54 is on: Quit (left) + Done (right, the default
-        // button). When it's off or unpermitted there's nothing to save, so just a
-        // centered Quit. Quit ends the process — it still returns at the next login
-        // unless the switch above is off (which unregisters the login item). The
-        // x positions match the centered 320-pt content column (app box / slider).
-        let btnW: CGFloat = 100, btnH: CGFloat = 32
-        let barY: CGFloat = (showFooter ? Self.footerH : 0) + 20
-        let sidePad: CGFloat = 70
+        // button). When it's off there's nothing to save, so just a centered Quit.
+        // Quit ends the process — it still returns at the next login unless the
+        // switch above is off (which unregisters the login item). The buttons sit
+        // on the same column edges as the app box and slider.
+        let btnW: CGFloat = 100
+        let barY: CGFloat = (showFooter ? Self.footerH : 0) + bottomMargin
+        let sidePad = columnX
 
         if switchOn {
             let quitBtn = NSButton(title: "Quit", target: NSApp,
@@ -1191,22 +1208,6 @@ class SettingsWindow: NSWindow {
             quitBtn.frame = NSRect(x: (contentW - btnW) / 2, y: barY, width: btnW, height: btnH)
             c.addSubview(quitBtn)
         }
-
-        // Tip Jar easter egg: a lone jar emoji tucked into the top-right of the
-        // titlebar, mirroring the traffic lights on the left. Tooltip + hand
-        // cursor (LinkButton) hint it's clickable; NSControl isn't part of the
-        // titlebar drag region, so the click still registers.
-        let tipBtn = LinkButton(title: "", target: self, action: #selector(openTipJar(_:)))
-        tipBtn.isBordered = false
-        let jarPara = NSMutableParagraphStyle(); jarPara.alignment = .center
-        tipBtn.attributedTitle = NSAttributedString(string: "🫙", attributes: [
-            .font: NSFont.systemFont(ofSize: 14), .paragraphStyle: jarPara])   // sized to ~match the traffic lights
-        let tipW: CGFloat = 34
-        // Mirror the traffic lights: the jar's top/right padding matches their
-        // top/left padding (≈9 pt each).
-        tipBtn.frame = NSRect(x: contentW - 34, y: totalH - 30, width: tipW, height: 26)
-        tipBtn.toolTip = "Tip Jar"
-        c.addSubview(tipBtn)
 
         // Blue footer strip: only present when there's an update to announce. Shows
         // the update status + an Update button, centered. The brand blue (the
@@ -1250,11 +1251,105 @@ class SettingsWindow: NSWindow {
             layoutFooter()
         }
 
-        contentView = c
+        if needsScroll {
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0,
+                                                    width: contentW + scrollerW, height: windowH))
+            scroll.drawsBackground = false          // the window's own background shows through
+            scroll.hasVerticalScroller = true
+            // Always visible, never fading: an overlay scroller disappears at rest,
+            // which leaves a window that's silently taller than it looks with no
+            // hint that there's anything below the fold.
+            scroll.autohidesScrollers = false
+            scroll.scrollerStyle = .legacy
+            scroll.documentView = c
+            contentView = scroll
+            // `c` is unflipped, so its origin is the *bottom* — without this the
+            // window opens on the button row with the title scrolled off. Drive the
+            // clip view rather than `c.scroll(_:)`, which is a no-op this early.
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: totalH - windowH))
+            scroll.reflectScrolledClipView(scroll.contentView)
+        } else {
+            contentView = c
+        }
         updateAppDisplay()
     }
 
-    @objc func refreshAxBanner() { rebuild(); center() }
+    /// The permission readout: a two-tone pill holding a status light per
+    /// permission. Granted reads as plain status; missing is an underlined link
+    /// that fires the real macOS request, so granting always happens through the
+    /// system's own dialog. Sized to its contents and centered.
+    private func addPermissionPill(hasAX: Bool, rowY: CGFloat, in v: NSView) {
+        let pillH = Self.pillH, segPad: CGFloat = 11
+        func cy(_ h: CGFloat) -> CGFloat { ((pillH - h) / 2).rounded() }
+
+        let heading = NSTextField(labelWithString: "System Permissions:")
+        heading.font = .systemFont(ofSize: 11, weight: .semibold)
+        heading.textColor = .secondaryLabelColor
+        heading.sizeToFit()
+        let headW = ceil(heading.frame.width), headH = ceil(heading.frame.height)
+
+        let title = NSMutableAttributedString(
+            string: "● ",
+            attributes: [.foregroundColor: hasAX ? NSColor.systemGreen : NSColor.systemRed,
+                         .font: NSFont.systemFont(ofSize: 9)])
+        var nameAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: hasAX ? NSColor.secondaryLabelColor : NSColor.labelColor,
+        ]
+        if !hasAX { nameAttrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        title.append(NSAttributedString(string: "Accessibility", attributes: nameAttrs))
+
+        // Only clickable when there's something to grant — LinkButton's pointing
+        // hand is the tell.
+        let item = hasAX ? NSButton() : LinkButton()
+        item.isBordered = false
+        item.attributedTitle = title
+        item.toolTip = hasAX
+            ? "Accessibility is on — Key54 can watch the right ⌘ key."
+            : "Key54 can't watch the right ⌘ key without it. Click to grant."
+        item.sizeToFit()
+        if !hasAX { item.target = self; item.action = #selector(grantAccessibility) }
+        let itemW = ceil(item.frame.width), itemH = ceil(item.frame.height)
+
+        // Two segments: the label chip, then a slightly lighter chip for the lights.
+        let labelSegW = segPad + headW + segPad
+        let lightsSegW = segPad + itemW + segPad
+        let totalW = labelSegW + lightsSegW
+
+        let pill = NSView(frame: NSRect(x: ((contentW - totalW) / 2).rounded(), y: rowY,
+                                        width: totalW, height: pillH))
+        pill.wantsLayer = true
+        pill.layer?.cornerRadius = pillH / 2
+        pill.layer?.masksToBounds = true
+        v.addSubview(pill)
+
+        // Two near-identical greys (about quaternary / quinary label strength —
+        // quinary has no NSColor, so approximate). Resolved against this window's
+        // appearance rather than a dynamic color, because `.cgColor` outside a
+        // draw cycle would otherwise pick up the app default.
+        let base = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+            ? NSColor.white : NSColor.black
+        let leftBG = NSView(frame: NSRect(x: 0, y: 0, width: labelSegW, height: pillH))
+        leftBG.wantsLayer = true
+        leftBG.layer?.backgroundColor = base.withAlphaComponent(0.10).cgColor
+        pill.addSubview(leftBG)
+        let rightBG = NSView(frame: NSRect(x: labelSegW, y: 0, width: lightsSegW, height: pillH))
+        rightBG.wantsLayer = true
+        rightBG.layer?.backgroundColor = base.withAlphaComponent(0.055).cgColor
+        pill.addSubview(rightBG)
+
+        heading.frame = NSRect(x: segPad, y: cy(headH), width: headW, height: headH)
+        pill.addSubview(heading)
+        item.frame = NSRect(x: labelSegW + segPad, y: cy(itemH), width: itemW, height: itemH)
+        pill.addSubview(item)
+    }
+
+    @objc private func grantAccessibility() { appDelegate?.promptForAccessibility() }
+
+    /// A permission flip no longer changes the window's height — only the pill's
+    /// contents — so rebuild in place instead of recentering a window the user
+    /// may have moved.
+    @objc func refreshAxBanner() { rebuild() }
 
     /// The footer only exists while an update is pending, so its appearance changes
     /// the window height — rebuild (and recenter) to add or remove it cleanly.
@@ -1359,8 +1454,10 @@ class SettingsWindow: NSWindow {
     /// One labeled slider row of the Custom preset editor.
     private func addCustomRow(to c: NSView, top: CGFloat, title: String,
                               value: TimeInterval, sliderTag: Int, labelTag: Int) {
-        let sliderW: CGFloat = 320
-        let x = (contentW - sliderW) / 2
+        // Inset from the sub-panel's edges by the same card padding the app box
+        // uses, rather than a hardcoded width that drifts when the column changes.
+        let sliderW = columnW - cardPad * 2
+        let x = columnX + cardPad
 
         let caption = NSTextField(labelWithString: title)
         caption.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
@@ -1409,99 +1506,141 @@ class SettingsWindow: NSWindow {
             guard response == .OK, let url = panel.url, let self else { return }
             UserDefaults.standard.set(url.path, forKey: "targetAppPath")
             self.appDelegate?.invalidateTargetCache()
-            self.updateAppDisplay()
+            // Rebuild, not just relabel: the card's width is measured from the app
+            // name, so a new name has to re-run the layout. rebuild() refreshes the
+            // icon and label on its way out.
+            self.rebuild()
         }
     }
 
-    @objc private func openAxSettings() {
-        NSWorkspace.shared.open(
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        )
+    /// Every row in the About popover opens the URL carried on its own button, so
+    /// there's one action rather than one method per link. The popover goes away
+    /// first — leaving it hanging over the window while a browser comes forward
+    /// looks like the click missed.
+    @objc private func openRowLink(_ sender: NSButton) {
+        guard let raw = sender.identifier?.rawValue, let url = URL(string: raw) else { return }
+        infoPopover?.performClose(nil)
+        NSWorkspace.shared.open(url)
     }
 
-    @objc private func openCoffee() {
-        NSWorkspace.shared.open(URL(string: "https://ko-fi.com/grokcodile")!)
-    }
+    /// The About popover, hung off the titlebar ⓘ: app icon, name, version, the
+    /// three places to go for help, then the "it's free…" lead-in and the two ways
+    /// to support Key54. Every row is one symbol-led button; what it does for you
+    /// is a tooltip, so the stack stays a column of actions rather than a wall of
+    /// copy. No Help row — the User Guide is the README.
+    ///
+    /// Built bottom-up, the way AppKit lays out an unflipped view, so the popover
+    /// is exactly as tall as its content and a copy change can't clip it.
+    @objc private func openAbout(_ sender: NSButton) {
+        let w: CGFloat = 260, pad: CGFloat = 16
+        let icon: CGFloat = 64, btnH: CGFloat = 30, rowGap: CGFloat = 8
+        let innerW = w - pad * 2
 
-    @objc private func openRepo() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/grokcodile/key54")!)
-    }
+        // (title, SF Symbol, tooltip, action). Both lists run bottom-up, the way
+        // the view is built. The lead-in text sits between them so its trailing
+        // ellipsis hands off into the two support buttons rather than into the
+        // help ones.
+        // (title, SF Symbol, what it does, where it goes). The URL lives here rather
+        // than in a per-row action, so the tooltip and the thing it opens can't
+        // drift apart. Note no description repeats its own URL — the tooltip prints
+        // that underneath.
+        typealias Row = (String, String, String, String)
+        let support: [Row] = [
+            ("Buy me a coffee", "mug",  "Tips keep it going",          "https://ko-fi.com/grokcodile"),
+            ("Star on GitHub",  "star", "A star helps others find it", "https://github.com/grokcodile/key54"),
+        ]
+        let help: [Row] = [
+            ("Bug Report", "ladybug", "Submit a support ticket",         "https://github.com/grokcodile/key54/issues/new"),
+            ("User Guide", "book",    "View help and app documentation", "https://github.com/grokcodile/key54#readme"),
+            ("Website",    "globe",   "Learn more about Key54",          "https://key54.app"),
+        ]
 
-    /// A little "note from the developer" popover that slides out of the Tip
-    /// Jar link: a round headshot, a personal message, and the three ways to
-    /// support Key54 (mirroring the website's Support section).
-    @objc private func openTipJar(_ sender: NSButton) {
-        let w: CGFloat = 285
-        let pad: CGFloat = 16, d: CGFloat = 64
-        let btnW: CGFloat = 210, btnH: CGFloat = 30, btnGap: CGFloat = 8
-
-        // The body is the only piece with a content-dependent height — measure
-        // the wrapped text and derive every frame (and the popover height) from
-        // it, so copy changes can never clip again.
+        // The lead-in is the only piece with a content-dependent height — measure
+        // it first and derive every frame (and the popover height) from it.
         let body = NSTextField(wrappingLabelWithString:
             "Key54 is 100% free.\nIf it's earned a spot on your Mac…")
         body.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
         body.textColor = .secondaryLabelColor
         body.alignment = .center
-        let bodyW = w - 36
         let bodyH = ceil(body.sizeThatFits(
-            NSSize(width: bodyW, height: .greatestFiniteMagnitude)).height)
+            NSSize(width: innerW, height: .greatestFiniteMagnitude)).height)
 
-        // Stack, bottom up: three pitch-as-button rows, body, greeting, headshot.
-        let bugY = pad
-        let kofiY = bugY + btnH + btnGap
-        let starY = kofiY + btnH + btnGap
-        let bodyY = starY + btnH + 12
-        let greetingY = bodyY + bodyH + 8
-        let photoY = greetingY + 20 + 10
-        let h = photoY + d + pad
+        func reserve(_ rows: [Row], from y: inout CGFloat) -> [CGFloat] {
+            var ys: [CGFloat] = []
+            for _ in rows { ys.append(y); y += btnH + rowGap }
+            return ys
+        }
+
+        // The lead-in leans on white space alone to group itself with the two
+        // buttons under it. A tinted panel was tried and dropped: any fill dark
+        // enough to read in dark mode lands as a grey slab in light mode.
+        var y = pad
+        let supportY = reserve(support, from: &y)   // its trailing gap spaces the text
+        y += 6
+        // Wider above the lead-in than below it: it introduces the two support
+        // buttons under it, so it should sit closer to them than to the help group.
+        let bodyY = y;               y += bodyH + 22
+        let helpY = reserve(help, from: &y)
+        y += 6
+        let versionY = y;            y += 15 + 2
+        // No gap above the name. A macOS app icon is drawn inside a canvas that
+        // carries its own transparent margin — roughly a fifth of the height — so
+        // any real gap here compounds with it and opens a hole under the icon.
+        let nameY    = y;            y += 24
+        let iconY    = y;            y += icon
+        let h = y + pad
 
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
 
-        // Round headshot — `headshot.heic` (128 px = 2× the 64 pt view) bundled
-        // into Resources by build.sh. HEIC keeps the asset ~7 KB instead of ~128 KB.
-        let photo = NSView(frame: NSRect(x: (w - d) / 2, y: photoY, width: d, height: d))
-        photo.wantsLayer = true
-        photo.layer?.cornerRadius = d / 2
-        photo.layer?.masksToBounds = true
-        photo.layer?.borderWidth = 1
-        photo.layer?.borderColor = NSColor.separatorColor.cgColor
-        if let url = Bundle.main.url(forResource: "headshot", withExtension: "heic"),
-           let img = NSImage(contentsOf: url) {
-            var rect = CGRect(origin: .zero, size: img.size)
-            photo.layer?.contents = img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
-            photo.layer?.contentsGravity = .resizeAspectFill
-        } else {
-            photo.layer?.backgroundColor = NSColor(white: 0.85, alpha: 1).cgColor
+        let iconView = NSImageView(frame: NSRect(x: (w - icon) / 2, y: iconY, width: icon, height: icon))
+        iconView.image = NSApp.applicationIconImage
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        v.addSubview(iconView)
+
+        func centered(_ text: String, _ y: CGFloat, _ height: CGFloat,
+                      size: CGFloat, weight: NSFont.Weight, color: NSColor) {
+            let f = NSTextField(labelWithString: text)
+            f.font = .systemFont(ofSize: size, weight: weight)
+            f.textColor = color
+            f.alignment = .center
+            f.frame = NSRect(x: pad, y: y, width: innerW, height: height)
+            v.addSubview(f)
         }
-        v.addSubview(photo)
+        centered("Key54", nameY, 24, size: 20, weight: .bold, color: .labelColor)
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        centered("Version \(version)", versionY, 15, size: 11, weight: .regular, color: .secondaryLabelColor)
 
-        let greeting = NSTextField(labelWithString: "Hi, I'm Ethan 👋")
-        greeting.font = .systemFont(ofSize: 15, weight: .semibold)
-        greeting.alignment = .center
-        greeting.frame = NSRect(x: 16, y: greetingY, width: w - 32, height: 20)
-        v.addSubview(greeting)
-
-        body.frame = NSRect(x: 18, y: bodyY, width: bodyW, height: bodyH)
+        body.frame = NSRect(x: pad, y: bodyY, width: innerW, height: bodyH)
         v.addSubview(body)
 
-        // The lead's ellipsis hands off into three centered action buttons.
-        func actionRow(_ y: CGFloat, _ title: String, _ tip: String,
-                       _ action: Selector) -> HoverButton {
-            let b = HoverButton(frame: NSRect(x: (w - btnW) / 2, y: y,
-                                              width: btnW, height: btnH))
-            b.title = title
-            b.toolTip = tip
-            b.target = self
-            b.action = action
-            return b
+        func place(_ rows: [Row], _ ys: [CGFloat]) {
+            for (i, row) in rows.enumerated() {
+                // A missing symbol just leaves a title-only button rather than a
+                // blank one, so a rename in some future SF Symbols can't break this.
+                let image = NSImage(systemSymbolName: row.1, accessibilityDescription: nil)?
+                    .withSymbolConfiguration(.init(pointSize: 13, weight: .regular))
+                // NSButton has no image/title spacing knob, so the gap is a leading
+                // space on the title.
+                let btn = NSButton(title: image == nil ? row.0 : " " + row.0,
+                                   target: self, action: #selector(openRowLink(_:)))
+                btn.bezelStyle = .rounded
+                btn.image = image
+                btn.imagePosition = image == nil ? .noImage : .imageLeading
+                // Without this the symbol pins to the button's leading edge and
+                // the title centers on its own, leaving a gap down the column.
+                btn.imageHugsTitle = true
+                // The destination rides on the button, so one action serves every
+                // row. Second tooltip line spells the link out — ↗ (forced to text
+                // presentation, or it renders as an emoji) marks it as leaving the
+                // app, and seeing the host before clicking is the point.
+                btn.identifier = NSUserInterfaceItemIdentifier(row.3)
+                btn.toolTip = "\(row.2)\n↗\u{FE0E} \(row.3)"
+                btn.frame = NSRect(x: pad, y: ys[i], width: innerW, height: btnH)
+                v.addSubview(btn)
+            }
         }
-        v.addSubview(actionRow(starY, "⭐️  Star on GitHub",
-                               "A star helps others find it", #selector(openRepo)))
-        v.addSubview(actionRow(kofiY, "☕  Buy me a coffee",
-                               "Tips keep it going", #selector(openCoffee)))
-        v.addSubview(actionRow(bugY, "🐞  Report a bug",
-                               "Bug reports make it better", #selector(openIssues)))
+        place(support, supportY)
+        place(help, helpY)
 
         let vc = NSViewController()
         vc.view = v
@@ -1509,13 +1648,12 @@ class SettingsWindow: NSWindow {
         pop.contentViewController = vc
         pop.contentSize = NSSize(width: w, height: h)
         pop.behavior = .transient
-        tipPopover = pop
-        pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)   // opens to the right of the jar
+        infoPopover = pop
+        // Below the button: it sits at the top-right of the titlebar, so the
+        // window is the only direction with room.
+        pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
     }
 
-    @objc private func openIssues() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/grokcodile/key54/issues/new")!)
-    }
 }
 
 // MARK: - Trigger HUD
@@ -2027,14 +2165,18 @@ final class TriggerHUD {
     // MARK: Helpers
 
     private func positionHUD() {
-        // Fixed near the bottom-center of the active screen, like the macOS
-        // volume/brightness HUD.
+        // Dead center of the active screen. The bottom-center spot the macOS
+        // volume HUD uses is easy to miss — it's in the corner of your eye, and on
+        // a tall display it's a long way from whatever you're looking at.
+        //
+        // Centered on `frame` rather than `visibleFrame`: the latter excludes the
+        // menu bar and Dock, which would bias the HUD up or sideways depending on
+        // where the Dock happens to live.
         let m = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(m, $0.frame, false) } ?? NSScreen.main
-        guard let f = screen?.visibleFrame else { return }
-        let x = f.midX - size / 2
-        let y = f.minY + 150 - size / 2   // ring center ~150 pt above the bottom
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
+        guard let f = screen?.frame else { return }
+        panel.setFrameOrigin(NSPoint(x: (f.midX - size / 2).rounded(),
+                                     y: (f.midY - size / 2).rounded()))
     }
 
     private func fadeOut(duration: TimeInterval) {

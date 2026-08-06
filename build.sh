@@ -1,15 +1,23 @@
 #!/bin/bash
 # Builds Key54.app into ./build. Used by both install.sh and CI.
 #
-# Optional code-signing: set SIGN_IDENTITY to a "Developer ID Application: …"
-# identity to sign for distribution; otherwise an ad-hoc signature is used.
+# Code-signing: set SIGN_IDENTITY to a "Developer ID Application: …" identity to
+# force one; otherwise the first Developer ID in the keychain is used, and only a
+# machine without one falls back to ad-hoc.
+#
+# The fallback matters for more than distribution. macOS keys the Accessibility
+# grant to the app's designated requirement — with a Developer ID that's the
+# stable "identifier + team certificate", but an ad-hoc signature has no cert, so
+# it reduces to the binary's cdhash. That changes on *every* build, so each
+# reinstall looks like a brand-new app and has to be re-granted Accessibility.
 set -e
 
 cd "$(dirname "$0")"
 
 APP_NAME="Key54"
 BUILD_DIR="./build/${APP_NAME}.app"
-SIGN_IDENTITY="${SIGN_IDENTITY:-}"
+SIGN_IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
+    | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')}"
 
 echo "Building ${APP_NAME}..."
 
@@ -28,10 +36,6 @@ if command -v pngquant >/dev/null 2>&1; then
 fi
 iconutil -c icns AppIcon.iconset -o AppIcon.icns
 cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
-
-# Developer headshot for the Tip Jar popover (optional — shows a placeholder
-# circle if absent). 128 px HEIC, ~7 KB.
-[ -f headshot.heic ] && cp headshot.heic "${BUILD_DIR}/Contents/Resources/headshot.heic"
 
 # Explicit deployment target: keeps the binary runnable on macOS 13+ even when
 # built with a newer SDK (Liquid Glass APIs are weak-linked and runtime-gated).
