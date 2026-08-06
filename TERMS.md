@@ -33,8 +33,9 @@ release). You can simply not install updates if you prefer.
 ## Payments
 
 Key54 is completely free. Nothing is gated, and there are no accounts,
-purchases, or subscriptions. The optional tip jar links to third-party
-services (Ko-fi, GitHub Sponsors) which have their own terms.
+purchases, or subscriptions. The About window (the ⓘ in the settings
+titlebar) offers optional links to third-party services — Ko-fi for tips
+and GitHub — which have their own terms.
 
 ## Not affiliated with Apple
 
