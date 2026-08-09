@@ -162,26 +162,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func appDidActivate(_ note: Notification) {
         guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey]
                 as? NSRunningApplication else { return }
-        let bundleID = app.bundleIdentifier
         // Track the app to return to — but never the target itself.
-        guard bundleID != resolvedBundleID() else { return }
-        if bundleID == Bundle.main.bundleIdentifier {
-            // Track ourselves only while the settings window is open, so
-            // summoning out of Settings returns to it. Background
-            // activations with no window never claim the "previous" slot.
-            if settingsWindow?.isVisible == true { previousApp = app }
-        } else {
-            previousApp = app
-        }
+        guard app.bundleIdentifier != resolvedBundleID() else { return }
+        // Only apps that live in the Dock are somewhere worth coming back to.
+        //
+        // Agents and menu-bar utilities put up the occasional window, and
+        // `dismiss` hiding the target *reveals* whatever is behind it in that
+        // Space. If that happens to be one of their windows — Key54's own
+        // settings panel, most often, since it is right there while you are
+        // configuring it — macOS makes them frontmost and they used to claim the
+        // "previous" slot on the way past. The toggle then bounced between the
+        // target and a settings window until that window was closed.
+        //
+        // This drops the old behaviour where summoning out of Settings returned
+        // to Settings. It returns to the last real app instead, which is both
+        // safer and closer to what the key is for.
+        guard app.activationPolicy == .regular else { return }
+        previousApp = app
     }
 
-    /// Called when the settings window closes: returning to Key54 only
-    /// makes sense while the window is up, so forget it as the previous app.
-    func settingsClosed() {
-        if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier {
-            previousApp = nil
-        }
-    }
+    /// Kept as a no-op hook: Key54 is `.accessory`, so `appDidActivate` can no
+    /// longer record it as the previous app and there is nothing left to clear.
+    /// The call sites stay so closing Settings has one obvious place to grow a
+    /// behaviour again if it ever needs one.
+    func settingsClosed() {}
 
     // MARK: - Toggle
 
@@ -201,32 +205,99 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Return to the previous app by bringing it forward with `openApplication`
-    /// (like clicking its Dock icon) — this reliably leaves a Space even when
-    /// the previous app has no window. Hide the target first *unless it is
-    /// full-screen*, because hiding a full-screen window leaves an empty Space;
-    /// in that case we leave it as-is so it stays full-screen for next time.
+    /// Put the previous app back the way you left it: if it had a focused window,
+    /// return to that app *and* that window; if it had none, just return to the app.
+    ///
+    /// Hide the target first *unless it is full-screen*, because hiding a
+    /// full-screen window leaves an empty Space; in that case we leave it as-is so
+    /// it stays full-screen for next time.
+    ///
+    /// **The way back mirrors the way in.** Summoning the target sends a reopen —
+    /// the same event a Dock click sends — so returning does too whenever the
+    /// destination has no focused window. An app with nothing open answers by
+    /// opening something, which is what every other route into an app on this
+    /// system does.
+    ///
+    /// Returning to a window-less app with a plain `activate` was tried, on the
+    /// principle that whatever state you left an app in is the state you should
+    /// come back to. It reads as a failure rather than a choice: the menu bar
+    /// changes and nothing else does, and from a full-screen Space the screen
+    /// does not move at all. Nobody expects the chosen app to work that way, so
+    /// there was never a reason to expect it of the return path.
+    ///
+    /// Where the destination *does* have a focused window, `activate` is still
+    /// the route — it raises that exact window without conjuring another.
+    ///
+    /// The Finder is the exception, because the desktop is a destination rather
+    /// than an empty app: returning to it window-less is correct, and it works
+    /// whenever the target was hidden. From a full-screen target it cannot work
+    /// at all — nothing is revealed and there is no window to switch to — so
+    /// that one case reopens like everything else.
     private func dismiss(_ frontmost: NSRunningApplication) {
+        // Finder is the fallback: it's always running, and it's where you end up
+        // when the app you came from has since quit.
         let prev = previousApp.flatMap { $0.isTerminated ? nil : $0 }
-        let prevURL = prev?.bundleURL
-            ?? URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app")
+            ?? NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first
 
-        if !isAppFullScreen(pid: frontmost.processIdentifier) {
-            frontmost.hide()
+        let targetFullScreen = isAppFullScreen(pid: frontmost.processIdentifier)
+        if !targetFullScreen { frontmost.hide() }
+
+        guard let prev else { return }
+        let hadWindow = focusedWindow(pid: prev.processIdentifier) != nil
+
+        // The Finder is the one app whose window-less state is somewhere to be:
+        // the desktop is a place you work, not an absence, so returning to it
+        // bare is right where it's possible. It's possible exactly when the
+        // target was hidden — hiding reveals the desktop and the Finder
+        // activates onto it. Leaving a full-screen Space there is nothing to
+        // reveal and no window in any Space to switch to, so the desktop is
+        // simply not reachable and a reopen is the only way through.
+        let toBareDesktop = prev.bundleIdentifier == "com.apple.finder" && !targetFullScreen
+
+        // Everything else with no window to land on: reopen, which is what a Dock
+        // click sends and what summoning the target already does. An app with
+        // nothing open answers by opening something — Pages offers its document
+        // picker — and that is the behaviour macOS has taught everywhere else.
+        // Plain activation makes the app frontmost while the screen does not
+        // visibly change, which reads as the switch having failed.
+        //
+        // Symmetry is the argument. You arrive at the chosen app through a reopen;
+        // there is no reason to expect the way back to behave differently.
+        if !hadWindow, !toBareDesktop {
+            reopen(prev)
+            return
         }
 
-        let config = NSWorkspace.OpenConfiguration()
-        config.activates = true
-        NSWorkspace.shared.openApplication(at: prevURL, configuration: config, completionHandler: nil)
+        bringForward(prev, from: frontmost)
 
-        // Raise the previous app's focused window. For a full-screen previous
-        // window this switches to its Space — which `openApplication` alone
-        // won't do for an omnipresent app like Finder.
-        if let prev {
+        // Raise the window it was on. For a full-screen previous window this is
+        // also what switches to its Space; activation alone won't.
+        if hadWindow {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                 self.raiseFocusedWindow(pid: prev.processIdentifier)
             }
         }
+    }
+
+    /// Bring `app` forward, transferring focus from the app we're leaving. The
+    /// macOS 14 cooperative form is the one that behaves like ⌘Tab — including
+    /// stepping out of a full-screen Space when the destination has no windows,
+    /// which a plain `activate()` won't reliably do. Falls back to the plain form
+    /// if that's refused; both are window-neutral, which is the point.
+    private func bringForward(_ app: NSRunningApplication, from: NSRunningApplication) {
+        if #available(macOS 14.0, *) {
+            if app.activate(from: from, options: []) { return }
+        }
+        _ = app.activate(options: [])
+    }
+
+    /// The Dock-click event: activates, and lets an app with no windows answer by
+    /// making one. Deliberately not the general path — see `dismiss`.
+    private func reopen(_ app: NSRunningApplication) {
+        guard let url = app.bundleURL else { _ = app.activate(options: []); return }
+        let cfg = NSWorkspace.OpenConfiguration()
+        cfg.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: cfg)
     }
 
     private func focusedWindow(pid: pid_t) -> AXUIElement? {
@@ -772,7 +843,11 @@ class SettingsWindow: NSWindow {
     private var infoPopover: NSPopover?
     private var infoButton: NSButton?           // titlebar ⓘ, installed once
     private var stylePills: [StylePill] = []   // the two Animation Style buttons
-    private let contentW: CGFloat = 460
+    // 340 of column plus a 38 pt margin either side. It was 460, which left the
+    // column stranded 60 pt from each edge while the title started at 32, so the
+    // window read as padded on the sides and not the top. Matching the 34 pt top
+    // margin exactly was then a shade tight, so this sits just wide of it.
+    private let contentW: CGFloat = 416
     private let pad: CGFloat = 32
     /// One centered content column. Everything that isn't full-bleed centered text
     /// — the description, both boxes, the slider, the button row — is this wide, so
@@ -802,7 +877,7 @@ class SettingsWindow: NSWindow {
     init(delegate: AppDelegate) {
         self.appDelegate = delegate
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 100),
+            contentRect: NSRect(x: 0, y: 0, width: 416, height: 100),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -911,11 +986,13 @@ class SettingsWindow: NSWindow {
         // a 12". Loosening any of them walks back toward the clamp-and-scroll
         // fallback in `rebuild()`, which is a last resort, not a design.
         // 28 pt of this is the titlebar the content runs under, so the title block
-        // starts 14 pt below the traffic lights — close to the top but still clear
-        // of them. `titleH` stays 36 to keep the 28 pt title itself unchanged.
-        let topMargin: CGFloat = 42
-        let titleH: CGFloat = 36
-        let titleSwitchGap: CGFloat = 8
+        // Matched to Liteswitch's settings header, which reads better: the title
+        // sits nearer the traffic lights and carries less weight, so the window
+        // opens on its contents rather than on its own name. Side by side the old
+        // values put the title 8 pt lower and 2 pt larger.
+        let topMargin: CGFloat = 34
+        let titleH: CGFloat = 33
+        let titleSwitchGap: CGFloat = 10
         let switchRowH: CGFloat = 28
         let chooseH: CGFloat = 32
         let captionH: CGFloat = 18      // a section's "Hold Duration" style caption
@@ -942,7 +1019,7 @@ class SettingsWindow: NSWindow {
         // The button row is spaced by the same sectionGap as everything else, so
         // the strip below it is the window's whole bottom margin — matched to the
         // clear space above the title.
-        let bottomMargin: CGFloat = 20
+        let bottomMargin: CGFloat = 24
         let btnH: CGFloat = 32
         let bottomBarH = bottomMargin + btnH
 
@@ -1676,12 +1753,14 @@ final class TriggerHUD {
     private let ringRadius: CGFloat = 52
     private let puckSize: CGFloat = 148
 
-    // Rebuilt on demand. The window-server backing of one long-lived panel can
-    // go stale across sleep/wake, screen lock, or a display change — the HUD then
-    // silently fails to appear until relaunch. invalidatePanel() (wired to those
-    // events in init) drops it so the next summon gets a fresh, valid window. The
-    // persistent CALayers below are re-parented into the new view tree by
-    // makePanel(), so only the window + container views are actually remade.
+    // Rebuilt eagerly, never lazily. The window-server backing of one long-lived
+    // panel goes stale across sleep/wake, screen lock, or a display change — the
+    // HUD then silently fails to appear until relaunch. And a panel can only ever
+    // show in full-screen Spaces that were created after it. rebuildPanel() (wired
+    // to those events, and to arriving in a new Space, in init) replaces it and
+    // registers the replacement straight away. The persistent CALayers below are
+    // re-parented into the new view tree by makePanel(), so only the window +
+    // container views are actually remade.
     private var _panel: NSPanel?
     private var panel: NSPanel {
         if let p = _panel { return p }
@@ -1706,9 +1785,10 @@ final class TriggerHUD {
     private var fadeGeneration = 0    // invalidates stale fade-out completions
     private var animationLength: TimeInterval = 0.001   // current preset's fill time
 
-    // Observers (wake / display change / unlock) that drop the panel so it is
-    // rebuilt fresh on the next summon — see invalidatePanel().
+    // Observers (wake / display change / unlock / Space change) that replace the
+    // panel with a freshly registered one — see rebuildPanel().
     private var rebuildObservers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
+    private var spaceRebuildWork: DispatchWorkItem?
 
     // MARK: Lifecycle
 
@@ -1729,26 +1809,58 @@ final class TriggerHUD {
         ]
         for (center, name) in zip(centers, names) {
             let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                self?.invalidatePanel()
+                self?.rebuildPanel()
             }
             rebuildObservers.append((center, token))
         }
+
+        // Arriving in a Space that already existed when this panel was built is the
+        // other way the HUD goes missing. `canJoinAllSpaces` doesn't mean *all*
+        // Spaces — macOS only adds the window to full-screen Spaces created after
+        // it, so every full-screen app open before Key54 launched (or before it was
+        // relaunched by an update) is a Space the HUD can never reach. Rebuilding on
+        // arrival puts a freshly registered panel in the Space you just entered.
+        let spaceToken = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.scheduleSpaceRebuild()
+        }
+        rebuildObservers.append((NSWorkspace.shared.notificationCenter, spaceToken))
+    }
+
+    /// Coalesce bursts of Space changes, and let the switch animation settle before
+    /// rebuilding — a panel created mid-transition can land in the Space you just
+    /// left. Never rebuilds out from under a charge that's already on screen.
+    private func scheduleSpaceRebuild() {
+        spaceRebuildWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self._panel?.isVisible != true else { self.scheduleSpaceRebuild(); return }
+            self.rebuildPanel()
+        }
+        spaceRebuildWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
     deinit {
         for (center, token) in rebuildObservers { center.removeObserver(token) }
     }
 
-    /// Drop the current panel so the next summon builds a fresh one with a clean
-    /// window-server backing. The persistent CALayers are re-parented into the new
-    /// view tree by makePanel(); only the window + container views are remade.
-    private func invalidatePanel() {
+    /// Drop the current panel and immediately build and register a replacement. The
+    /// persistent CALayers are re-parented into the new view tree by makePanel();
+    /// only the window + container views are remade.
+    ///
+    /// Rebuilding *now* rather than lazily on the next summon matters: a panel first
+    /// created during a summon is too late to join the Space it's summoned into, so
+    /// deferring the rebuild trades one failure mode for another. See prewarm().
+    private func rebuildPanel() {
         // close() (not just orderOut) removes the panel from the app's window list,
         // so dropping our reference lets ARC free it — no accumulation across
         // repeated sleep/lock cycles. isReleasedWhenClosed is false, so this is the
         // safe ARC disposal pattern: close to dismiss, nil to deallocate.
         _panel?.close()
         _panel = nil
+        prewarm()
     }
 
     /// Build and register the panel now (at launch), so it pre-dates any
