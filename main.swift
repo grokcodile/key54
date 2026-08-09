@@ -834,8 +834,24 @@ final class StylePill: NSView {
         layer?.borderColor = (isSelected ? accent : .separatorColor).cgColor
     }
 
-    override func mouseDown(with event: NSEvent) { onSelect() }
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+    /// A plain NSView gets none of NSControl's disabled handling, so the dimmed
+    /// state has to refuse clicks and drop the pointing hand itself — otherwise a
+    /// greyed-out pill still selects, which is worse than not dimming it at all.
+    var isEnabled = true {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        onSelect()
+    }
+    override func resetCursorRects() {
+        guard isEnabled else { return }
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
 }
 
 class SettingsWindow: NSWindow {
@@ -937,43 +953,32 @@ class SettingsWindow: NSWindow {
         // through the system's own prompt, so a missing one no longer hides the
         // window's contents behind a wall of instructions.
         let switchOn = enabled
-        let showControls = enabled                       // app picker / timing / animation
-        let showsCustom = showControls && appDelegate?.selectedPreset == 4
+        // The controls are always present and always laid out the same. Turning
+        // Key54 off dims them and takes them out of service rather than removing
+        // them, so the window never changes shape and you can still see what it's
+        // set to while it's off.
+        let showsCustom = appDelegate?.selectedPreset == 4
         // The dark footer strip only exists when there's an update to announce;
         // otherwise it isn't shown at all.
         let showFooter = (appDelegate?.updateState ?? .upToDate) != .upToDate
         let innerW = contentW - pad * 2
 
-        // Description under the switch: the normal usage hint, or the "turned
-        // off" message.
+        // Description under the switch. Constant in both states: turning Key54 off
+        // dims and disables the controls in place rather than rearranging the
+        // window, so nothing here is allowed to change height. What being off
+        // actually costs you is the switch's own tooltip.
         let descW: CGFloat = 340
         let descPara = NSMutableParagraphStyle()
         descPara.alignment = .center
         descPara.paragraphSpacing = 10
         descPara.lineBreakMode = .byWordWrapping
-        let descStr: NSAttributedString
-        if enabled {
-            descStr = NSAttributedString(
-                string: "Hold the Command (⌘) key on the right side of your keyboard to summon the application below—hold it again to return to whatever you were doing.",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
-                    .foregroundColor: NSColor.secondaryLabelColor,
-                    .paragraphStyle: descPara,
-                ])
-        } else {
-            // Off state: the explanation, then a big "unplugged" glyph.
-            let s = NSMutableAttributedString(
-                string: "Key54 is unplugged and will not restart at login.\n",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
-                    .foregroundColor: NSColor.secondaryLabelColor,
-                    .paragraphStyle: descPara,
-                ])
-            s.append(NSAttributedString(
-                string: "🔌",
-                attributes: [.font: NSFont.systemFont(ofSize: 46), .paragraphStyle: descPara]))
-            descStr = s
-        }
+        let descStr = NSAttributedString(
+            string: "Hold the Command (⌘) key on the right side of your keyboard to summon the application below—hold it again to return to whatever you were doing.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: descPara,
+            ])
         let descH = ceil(descStr.boundingRect(
             with: NSSize(width: descW, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]).height) + 2
@@ -1004,7 +1009,7 @@ class SettingsWindow: NSWindow {
         let sliderBlockH = tickH + 6 + 22 + captionGap + captionH
         // The style selector only matters when there's a charge to visualize, so
         // it's hidden for Instant/Short (preset < 2 — no charge animation).
-        let showsAnimationStyle = showControls && (appDelegate?.selectedPreset ?? 2) >= 2
+        let showsAnimationStyle = (appDelegate?.selectedPreset ?? 2) >= 2
         let stylePillH: CGFloat = 40    // StylePill: 26 pt glyph + 7 pt above and below
         let animationStyleBlockH = stylePillH + captionGap + captionH
         // Custom timing sub-panel: a 110 pt box (two 40 pt rows, 6 pt apart, 12 pt
@@ -1059,11 +1064,11 @@ class SettingsWindow: NSWindow {
         // of thing (is Key54 actually live?); below the description it read as an
         // afterthought stranded between two sections.
         let switchBlock = titleSwitchGap + switchRowH + pillGap + Self.pillH + unitGap + descH
-        // The functional controls (app picker, timing, animation) only show when on.
-        let enabledBody = sectionGap + appBoxH + sectionGap + sliderBlockH + customBlockH
-                        + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
-        let totalH = topMargin + titleH + switchBlock
-                   + (showControls ? enabledBody : 0)
+        // The functional controls (app picker, timing, animation) — present in both
+        // states, so this is unconditional.
+        let controlsBody = sectionGap + appBoxH + sectionGap + sliderBlockH + customBlockH
+                         + (showsAnimationStyle ? sectionGap + animationStyleBlockH : 0)
+        let totalH = topMargin + titleH + switchBlock + controlsBody
                    + sectionGap + bottomBarH + (showFooter ? Self.footerH : 0)
 
         // Never taller than the screen can show. At full extension — Custom timing
@@ -1079,7 +1084,15 @@ class SettingsWindow: NSWindow {
         // centered column stays where it is and nothing shifts.
         let scrollerW: CGFloat = needsScroll
             ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
+        // Pin the top-left across the resize. setContentSize anchors the *bottom*
+        // left, so a taller layout grows upward and the window appears to jump —
+        // and recentering afterwards is worse, since it drags a window you moved
+        // back to the middle. Growing downward from a fixed top edge is what makes
+        // toggling the switch, changing preset, or the update footer arriving all
+        // leave the window where you put it.
+        let keepTopLeft: NSPoint? = isVisible ? NSPoint(x: frame.minX, y: frame.maxY) : nil
         setContentSize(NSSize(width: contentW + scrollerW, height: windowH))
+        if let p = keepTopLeft { setFrameTopLeftPoint(p) }
 
         // Fresh content view — plain, so the window's own opaque background shows
         // through and the whole surface (titlebar included) reads as one solid
@@ -1108,6 +1121,14 @@ class SettingsWindow: NSWindow {
             capLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
             capLabel.textColor = switchOn ? .labelColor : .secondaryLabelColor
             capLabel.sizeToFit()
+            // Carries what the old "unplugged" message used to say. That message
+            // was a different height from the normal description, which is exactly
+            // the kind of reflow that dimming-in-place is meant to avoid.
+            let switchTip = switchOn
+                ? "The right ⌘ key is live and Key54 starts at login. Off releases both."
+                : "The right ⌘ key does nothing and Key54 won't start at login. On restores both."
+            sw.toolTip = switchTip
+            capLabel.toolTip = switchTip
             let capW = ceil(capLabel.frame.width), capH = ceil(capLabel.frame.height)
             let swGap: CGFloat = 8
             let groupX = (contentW - (capW + swGap + swW)) / 2
@@ -1130,7 +1151,11 @@ class SettingsWindow: NSWindow {
             c.addSubview(desc)
         }
 
-        if showControls {
+        // Everything below is dimmed and taken out of service when Key54 is off —
+        // `controls` collects it so one alpha and one isEnabled sweep at the end
+        // covers every piece, and nothing new can be added and forgotten.
+        var controls: [NSView] = []
+
         // App-selection tile — icon + name + change button in a narrow card.
         y -= sectionGap + appBoxH
         let boxW = appBoxW
@@ -1143,24 +1168,24 @@ class SettingsWindow: NSWindow {
         appBox.borderWidth = 1
         appBox.cornerRadius = 10
         appBox.titlePosition = .noTitle
-        c.addSubview(appBox)
+        c.addSubview(appBox); controls.append(appBox)
 
         let iconY = y + appBoxH - cardPad - iconH
         let cardIcon = NSImageView(frame: NSRect(x: boxX + (boxW - iconH) / 2, y: iconY,
                                                  width: iconH, height: iconH))
         cardIcon.imageScaling = .scaleProportionallyUpOrDown
         cardIcon.tag = 11
-        c.addSubview(cardIcon)
+        c.addSubview(cardIcon); controls.append(cardIcon)
 
         // The card is sized to this name, so it only truncates once a name is long
         // enough to hit the column cap.
         let nameY = iconY - iconNameGap - nameH
         nameField.frame = NSRect(x: boxX + cardPad, y: nameY, width: boxW - cardPad * 2, height: nameH)
-        c.addSubview(nameField)
+        c.addSubview(nameField); controls.append(nameField)
 
         chooseBtn.frame = NSRect(x: boxX + cardPad, y: y + cardPad,
                                  width: chooseW, height: chooseH)
-        c.addSubview(chooseBtn)
+        c.addSubview(chooseBtn); controls.append(chooseBtn)
 
         // Hold-duration: five discrete stops (Instant … Custom).
         y -= sectionGap + sliderBlockH
@@ -1169,7 +1194,7 @@ class SettingsWindow: NSWindow {
         caption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
         caption.textColor = .secondaryLabelColor
         caption.alignment = .center
-        c.addSubview(caption)
+        c.addSubview(caption); controls.append(caption)
 
         let sliderW = columnW
         let sliderX = columnX
@@ -1184,7 +1209,7 @@ class SettingsWindow: NSWindow {
         slider.numberOfTickMarks = labels.count
         slider.allowsTickMarkValuesOnly = true
         slider.tickMarkPosition = .below
-        c.addSubview(slider)
+        c.addSubview(slider); controls.append(slider)
 
         // Stop labels under each tick.
         let knobInset: CGFloat = 8
@@ -1198,7 +1223,7 @@ class SettingsWindow: NSWindow {
             let lw: CGFloat = 70
             let cx = trackLeft + (CGFloat(i) / CGFloat(last)) * trackW
             lbl.frame = NSRect(x: cx - lw / 2, y: y, width: lw, height: tickH)
-            c.addSubview(lbl)
+            c.addSubview(lbl); controls.append(lbl)
         }
 
         // Custom preset: an inset sub-panel — an outlined box holding the
@@ -1218,15 +1243,16 @@ class SettingsWindow: NSWindow {
             box.borderWidth = 1
             box.cornerRadius = 10
             box.titlePosition = .noTitle
-            c.addSubview(box)
+            c.addSubview(box); controls.append(box)
 
             let row1 = cBoxTop - cardPad
-            addCustomRow(to: c, top: row1, title: "Key Delay",
-                         value: appDelegate?.customKeyDelay ?? 0.5,
-                         sliderTag: 21, labelTag: 23)
-            addCustomRow(to: c, top: row1 - (customRowH + customRowGap), title: "Animation Length",
-                         value: appDelegate?.customAnimationLength ?? 0.4,
-                         sliderTag: 22, labelTag: 24)
+            controls += addCustomRow(to: c, top: row1, title: "Key Delay",
+                                     value: appDelegate?.customKeyDelay ?? 0.5,
+                                     sliderTag: 21, labelTag: 23)
+            controls += addCustomRow(to: c, top: row1 - (customRowH + customRowGap),
+                                     title: "Animation Length",
+                                     value: appDelegate?.customAnimationLength ?? 0.4,
+                                     sliderTag: 22, labelTag: 24)
         }
 
         // Animation Style: two selectable pills, each showing the style's glyph
@@ -1238,7 +1264,7 @@ class SettingsWindow: NSWindow {
             styleCaption.font = .systemFont(ofSize: NSFont.systemFontSize + 1)
             styleCaption.textColor = .secondaryLabelColor
             styleCaption.alignment = .center
-            c.addSubview(styleCaption)
+            c.addSubview(styleCaption); controls.append(styleCaption)
 
             let selected = appDelegate?.animationStyle ?? 0
             stylePills = [(false, "Power Up"), (true, "Level Up")].enumerated().map { i, opt in
@@ -1251,40 +1277,50 @@ class SettingsWindow: NSWindow {
             var px = (contentW - totalW) / 2
             for pill in stylePills {
                 pill.setFrameOrigin(NSPoint(x: px, y: y))   // row sits at the block bottom
-                c.addSubview(pill)
+                c.addSubview(pill); controls.append(pill)
                 px += pill.frame.width + gapX
             }
         }
-        }   // if enabled
 
-        // Bottom buttons. When Key54 is on: Quit (left) + Done (right, the default
-        // button). When it's off there's nothing to save, so just a centered Quit.
-        // Quit ends the process — it still returns at the next login unless the
-        // switch above is off (which unregisters the login item). The buttons sit
-        // on the same column edges as the app box and slider.
+        // Off: dim the whole control stack and take every interactive piece out of
+        // service, in place. The settings stay legible while Key54 is off, which is
+        // the point — you can see what it's set to without turning it back on.
+        if !enabled {
+            for view in controls {
+                view.alphaValue = 0.5
+                // Only the genuinely interactive pieces get disabled. Labels, boxes
+                // and the app icon are NSControls too, and `isEnabled = false` greys
+                // them on top of the alpha — dimmed twice reads as broken, not off.
+                switch view {
+                case let button as NSButton:  button.isEnabled = false
+                case let slider as NSSlider:  slider.isEnabled = false
+                case let pill as StylePill:   pill.isEnabled = false
+                default: break
+                }
+            }
+        }
+
+        // Bottom buttons: Quit (left) and Done (right, the default button). Both stay
+        // live when Key54 is off — closing and quitting are still meaningful, and a
+        // button row that changes shape would undo the point of dimming in place.
+        // Quit ends the process; it still returns at the next login unless the switch
+        // above is off, which unregisters the login item. They sit on the same column
+        // edges as the app box and slider.
         let btnW: CGFloat = 100
         let barY: CGFloat = (showFooter ? Self.footerH : 0) + bottomMargin
         let sidePad = columnX
 
-        if switchOn {
-            let quitBtn = NSButton(title: "Quit", target: NSApp,
-                                   action: #selector(NSApplication.terminate(_:)))
-            quitBtn.bezelStyle = .rounded
-            quitBtn.frame = NSRect(x: sidePad, y: barY, width: btnW, height: btnH)
-            c.addSubview(quitBtn)
+        let quitBtn = NSButton(title: "Quit", target: NSApp,
+                               action: #selector(NSApplication.terminate(_:)))
+        quitBtn.bezelStyle = .rounded
+        quitBtn.frame = NSRect(x: sidePad, y: barY, width: btnW, height: btnH)
+        c.addSubview(quitBtn)
 
-            let doneBtn = NSButton(title: "Done", target: self, action: #selector(saveAndClose))
-            doneBtn.bezelStyle = .rounded
-            doneBtn.keyEquivalent = "\r"   // the default (accent-tinted) button
-            doneBtn.frame = NSRect(x: contentW - sidePad - btnW, y: barY, width: btnW, height: btnH)
-            c.addSubview(doneBtn)
-        } else {
-            let quitBtn = NSButton(title: "Quit", target: NSApp,
-                                   action: #selector(NSApplication.terminate(_:)))
-            quitBtn.bezelStyle = .rounded
-            quitBtn.frame = NSRect(x: (contentW - btnW) / 2, y: barY, width: btnW, height: btnH)
-            c.addSubview(quitBtn)
-        }
+        let doneBtn = NSButton(title: "Done", target: self, action: #selector(saveAndClose))
+        doneBtn.bezelStyle = .rounded
+        doneBtn.keyEquivalent = "\r"   // the default (accent-tinted) button
+        doneBtn.frame = NSRect(x: contentW - sidePad - btnW, y: barY, width: btnW, height: btnH)
+        c.addSubview(doneBtn)
 
         // Blue footer strip: only present when there's an update to announce. Shows
         // the update status + an Update button, centered. The brand blue (the
@@ -1429,8 +1465,9 @@ class SettingsWindow: NSWindow {
     @objc func refreshAxBanner() { rebuild() }
 
     /// The footer only exists while an update is pending, so its appearance changes
-    /// the window height — rebuild (and recenter) to add or remove it cleanly.
-    func refreshFooter() { rebuild(); center() }
+    /// the window height. rebuild() keeps the top-left pinned, so the strip appears
+    /// by growing downward rather than shoving the window around.
+    func refreshFooter() { rebuild() }
 
     private func layoutFooter() {
         guard let status = footerStatus, let btn = footerButton else { return }
@@ -1499,8 +1536,7 @@ class SettingsWindow: NSWindow {
     /// to swap between the full settings and the "disabled" message.
     @objc private func toggleEnabled(_ sender: NSSwitch) {
         appDelegate?.setAppEnabled(sender.state == .on)
-        rebuild()
-        center()
+        rebuild()   // rebuild() holds the window's top-left; no recentering
     }
 
     @objc private func sliderChanged(_ sender: NSSlider) {
@@ -1516,8 +1552,7 @@ class SettingsWindow: NSWindow {
         // slider finishes tracking — tearing it down mid-drag confuses AppKit.
         if (idx == 4) != (old == 4) || (idx >= 2) != (old >= 2) {
             DispatchQueue.main.async { [weak self] in
-                self?.rebuild()
-                self?.center()
+                self?.rebuild()   // grows/shrinks from a fixed top edge
             }
         }
     }
@@ -1528,9 +1563,11 @@ class SettingsWindow: NSWindow {
         stylePills.forEach { $0.setSelected($0.styleTag == idx) }
     }
 
-    /// One labeled slider row of the Custom preset editor.
+    /// One labeled slider row of the Custom preset editor. Returns the views it
+    /// added so the caller can fold them into the dim-and-disable sweep.
+    @discardableResult
     private func addCustomRow(to c: NSView, top: CGFloat, title: String,
-                              value: TimeInterval, sliderTag: Int, labelTag: Int) {
+                              value: TimeInterval, sliderTag: Int, labelTag: Int) -> [NSView] {
         // Inset from the sub-panel's edges by the same card padding the app box
         // uses, rather than a hardcoded width that drifts when the column changes.
         let sliderW = columnW - cardPad * 2
@@ -1556,6 +1593,8 @@ class SettingsWindow: NSWindow {
         slider.frame = NSRect(x: x, y: top - 40, width: sliderW, height: 22)
         slider.tag = sliderTag
         c.addSubview(slider)
+
+        return [caption, readout, slider]
     }
 
     @objc private func customSliderChanged(_ sender: NSSlider) {
