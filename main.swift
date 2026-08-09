@@ -598,6 +598,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // com.apple.accessibility.api notification often misses, so this backs it up.
     func applicationDidBecomeActive(_ notification: Notification) { syncAccessibility() }
 
+    // Key54 deliberately does *not* clear its own quarantine flag at launch. The
+    // API works (URLResourceValues.quarantineProperties = nil), but only against a
+    // bundle that isn't running — macOS refuses the write for a live app, and at
+    // launch we are by definition live. Tested: identical code clears it fine on
+    // the same bundle with the app quit, and silently fails with it running. The
+    // clearing therefore lives in the update helper, which runs as a separate
+    // process while Key54 is killed.
+
     // MARK: - Updates
 
     /// Ask GitHub for the latest release. Only ever fires where the answer is
@@ -693,6 +701,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pkill -x Key54 2>/dev/null
         for i in $(seq 1 20); do pgrep -x Key54 >/dev/null || break; sleep 0.5; done
         "\(brew)" upgrade --cask key54 >/dev/null 2>&1
+        # Homebrew tags cask installs with com.apple.quarantine, and a quarantined
+        # app needs an interactive first launch to be approved. Key54's first launch
+        # after a restart is launchd starting the login item — no user, no approval,
+        # so Gatekeeper refuses it with "Apple could not verify Key54 is free of
+        # malware" and the app never comes back. Clearing the tag is what
+        # `brew install --cask --no-quarantine` does; the bundle is still signed,
+        # notarized and stapled, and this only ever runs on an update the user asked
+        # for, against our own bundle.
+        xattr -dr com.apple.quarantine "\(bundle)" 2>/dev/null
         open "\(bundle)"
         """
         let path = NSTemporaryDirectory() + "key54-update.sh"
