@@ -60,7 +60,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Newest release (no leading "v") when it's newer than ours, else nil.
     private(set) var latestVersion: String?
     private var updateStarting = false             // guards against a double Update click
-    private var updateTimer: Timer?
     let dmgURL = "https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
     /// Installed via the Homebrew cask? Its metadata lives in the Caskroom — but
     /// the Caskroom existing only says *a* Homebrew copy is around, not that it's
@@ -110,13 +109,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // relaunch counts as a user open — the update was clicked from the settings
         // window, so it comes back showing the new version.)
         if !launchedAsLoginItem {
-            showSettings()
-        }
-
-        // Look for a newer release now, then every 6 h while running.
-        checkForUpdate()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
-            self?.checkForUpdate()
+            showSettings()   // checks for an update on its way in
+        } else {
+            // Starting silently at login is the one time nothing will ever bring the
+            // answer to you: no window now, and possibly not for weeks. So check
+            // once here, and raise the window only if there's actually something to
+            // act on — the update footer is the whole reason for showing it.
+            //
+            // This is the only place Key54 opens a window you didn't ask for, and
+            // it's deliberately confined to login: the same thing on a timer would
+            // interrupt work mid-session, which is why there's no polling at all.
+            // Delayed so it lands *after* the login rush. Showing a window while
+            // other login items are still starting means whichever one activates
+            // next buries it, and the whole point is that this one is seen.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                self?.checkForUpdate { [weak self] _ in
+                    guard let self, self.updateState != .upToDate else { return }
+                    self.showSettings(checkingForUpdate: false)   // just checked
+                }
+            }
         }
     }
 
@@ -149,12 +160,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    func showSettings() {
+    /// `checkingForUpdate` is only false when the caller has just checked — the
+    /// login-launch path, which opens this window precisely *because* it found
+    /// something. Re-asking there would be a second request for an answer already
+    /// in hand.
+    func showSettings(checkingForUpdate: Bool = true) {
         if settingsWindow == nil { settingsWindow = SettingsWindow(delegate: self) }
         settingsWindow?.updateAppDisplay()
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
-        checkForUpdate()   // footer shows fresh update status whenever it's seen
+        if checkingForUpdate {
+            checkForUpdate()   // footer shows fresh update status whenever it's seen
+        }
     }
 
     // MARK: - App tracking
@@ -583,23 +600,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Updates
 
-    /// Ask GitHub for the latest release. Deliberately unthrottled — it fires on
-    /// launch, every 6 h, and on every settings open (a handful of requests a day),
-    /// so the footer always reflects fresh state whenever eyes are on it. On a
-    /// newer version the footer surfaces an Update button (it never self-updates).
-    func checkForUpdate() {
+    /// Ask GitHub for the latest release. Only ever fires where the answer is
+    /// visible: opening the settings window, or clicking the version line in the
+    /// About popover. On a newer version the footer surfaces an Update button (it
+    /// never self-updates).
+    ///
+    /// `completion` reports whether GitHub actually answered, and always runs on the
+    /// main queue — the on-demand check needs to say "couldn't check" rather than
+    /// sit on "Checking…" forever, and `handleLatest` deliberately stays silent when
+    /// nothing changed, so it can't be used as the signal.
+    func checkForUpdate(completion: ((Bool) -> Void)? = nil) {
         guard let url = URL(string: "https://api.github.com/repos/grokcodile/key54/releases/latest")
-        else { return }
+        else { completion?(false); return }
         var req = URLRequest(url: url)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         req.timeoutInterval = 10
         Task { [weak self] in
             guard let (data, _) = try? await URLSession.shared.data(for: req),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let tag = json["tag_name"] as? String else { return }
+                  let tag = json["tag_name"] as? String, let self else {
+                await MainActor.run { completion?(false) }
+                return
+            }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-            guard let self else { return }
-            await MainActor.run { self.handleLatest(latest) }
+            await MainActor.run {
+                self.handleLatest(latest)
+                completion?(true)
+            }
         }
     }
 
@@ -858,6 +885,10 @@ class SettingsWindow: NSWindow {
     weak var appDelegate: AppDelegate?
     private var infoPopover: NSPopover?
     private var infoButton: NSButton?           // titlebar ⓘ, installed once
+    /// The About popover's version line, which doubles as the update check. Weak
+    /// and re-set on every open — the popover is rebuilt from scratch each time, so
+    /// a check still running when it closes must not write to a dead view.
+    private weak var versionLabel: NSButton?
     private var stylePills: [StylePill] = []   // the two Animation Style buttons
     // 340 of column plus a 38 pt margin either side. It was 460, which left the
     // column stranded 60 pt from each edge while the title started at 32, so the
@@ -1633,6 +1664,35 @@ class SettingsWindow: NSWindow {
     /// there's one action rather than one method per link. The popover goes away
     /// first — leaving it hanging over the window while a browser comes forward
     /// looks like the click missed.
+    /// Render the version line, optionally with a trailing status. Centered and in
+    /// the same 11 pt secondary style the plain label used, so the line doesn't
+    /// shout — the pointing-hand cursor and the tooltip are what say it's clickable.
+    private func setVersionLine(_ status: String?) {
+        guard let btn = versionLabel else { return }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let para = NSMutableParagraphStyle(); para.alignment = .center
+        btn.attributedTitle = NSAttributedString(
+            string: status.map { "Version \(version) · \($0)" } ?? "Version \(version)",
+            attributes: [.font: NSFont.systemFont(ofSize: 11),
+                         .foregroundColor: NSColor.secondaryLabelColor,
+                         .paragraphStyle: para])
+    }
+
+    /// Ask GitHub now, and report the answer on the line itself. When there *is* an
+    /// update, the settings window's footer owns the actual Update button — saying
+    /// so here rather than offering a second way to trigger it keeps one path.
+    @objc private func checkForUpdatesNow(_ sender: NSButton) {
+        setVersionLine("Checking…")
+        appDelegate?.checkForUpdate { [weak self] reachable in
+            guard let self else { return }
+            guard reachable else { setVersionLine("Couldn't check"); return }
+            switch appDelegate?.updateState ?? .upToDate {
+            case .upToDate: setVersionLine("Up to date")
+            default:        setVersionLine("Update available")
+            }
+        }
+    }
+
     @objc private func openRowLink(_ sender: NSButton) {
         guard let raw = sender.identifier?.rawValue, let url = URL(string: raw) else { return }
         infoPopover?.performClose(nil)
@@ -1723,8 +1783,18 @@ class SettingsWindow: NSWindow {
             v.addSubview(f)
         }
         centered("Key54", nameY, 24, size: 20, weight: .bold, color: .labelColor)
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        centered("Version \(version)", versionY, 15, size: 11, weight: .regular, color: .secondaryLabelColor)
+
+        // The version line doubles as the update check — it answers the question
+        // the version number raises. An action, not a preference: there's no
+        // setting for this and no background polling, so this and opening settings
+        // are the only two moments Key54 asks GitHub anything.
+        let versionBtn = LinkButton(title: "", target: self, action: #selector(checkForUpdatesNow(_:)))
+        versionBtn.isBordered = false
+        versionBtn.toolTip = "Check for updates"
+        versionBtn.frame = NSRect(x: pad, y: versionY, width: innerW, height: 15)
+        v.addSubview(versionBtn)
+        versionLabel = versionBtn
+        setVersionLine(nil)
 
         body.frame = NSRect(x: pad, y: bodyY, width: innerW, height: bodyH)
         v.addSubview(body)
