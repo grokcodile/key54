@@ -60,6 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Newest release (no leading "v") when it's newer than ours, else nil.
     private(set) var latestVersion: String?
     private var updateStarting = false             // guards against a double Update click
+    private var updateWatchdog: Timer?
     let dmgURL = "https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg"
     /// Installed via the Homebrew cask? Its metadata lives in the Caskroom — but
     /// the Caskroom existing only says *a* Homebrew copy is around, not that it's
@@ -719,10 +720,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             p.executableURL = URL(fileURLWithPath: "/bin/sh")
             p.arguments = [path]
             try p.run()
+            armUpdateWatchdog()
         } catch {
             updateStarting = false            // let the user try again
             updateState = .failed
             settingsWindow?.refreshFooter()
+        }
+    }
+
+    /// A successful upgrade ends with this process being killed, so reaching the
+    /// end of this timer means it didn't happen: brew found nothing to do, or the
+    /// helper died. Without it the footer sits on "Updating…" forever with no
+    /// button and no way back — and `.updating` is the one state that draws no
+    /// button at all, so there'd be no way to retry short of quitting.
+    ///
+    /// The likeliest cause is a race in our own release pipeline: the workflow
+    /// publishes the GitHub release *before* it bumps the Homebrew tap, so in that
+    /// window the API reports a new version while `brew upgrade` has nothing to do.
+    /// That's exactly when someone clicks Update.
+    ///
+    /// Generous, because `brew update` on a cold index is slow. Firing early is
+    /// harmless: if brew was merely slow it kills us anyway and we come back
+    /// upgraded, so the transient failure is never seen.
+    private func armUpdateWatchdog() {
+        updateWatchdog?.invalidate()
+        updateWatchdog = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) {
+            [weak self] _ in
+            guard let self, self.updateState == .updating else { return }
+            self.updateStarting = false       // let them try again
+            self.updateState = .failed        // shows the button, manual path behind it
+            self.settingsWindow?.refreshFooter()
+            // Re-check: if brew quietly did replace us, this corrects to upToDate.
+            self.checkForUpdate()
         }
     }
 
