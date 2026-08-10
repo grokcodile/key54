@@ -149,7 +149,7 @@ func write(_ master: CGImage, _ px: Int, to path: String) {
 let master = renderMaster(renderKeycap())
 
 try? FileManager.default.createDirectory(atPath: iconsetDir, withIntermediateDirectories: true)
-// No 1024px (512x512@2x) slice, matching Liteswitch. That one rendering is more
+// No 1024px (512x512@2x) slice, matching Pullcord. That one rendering is more
 // than half the .icns — 390KB with it, 172KB without — and the only things that
 // ask for it are the App Store and Finder's largest icon-view zoom. Key54 is an
 // LSUIElement agent with no Dock icon, so it never renders one that big in

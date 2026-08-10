@@ -1068,7 +1068,7 @@ class SettingsWindow: NSWindow {
         // a 12". Loosening any of them walks back toward the clamp-and-scroll
         // fallback in `rebuild()`, which is a last resort, not a design.
         // 28 pt of this is the titlebar the content runs under, so the title block
-        // Matched to Liteswitch's settings header, which reads better: the title
+        // Matched to Pullcord's settings header, which reads better: the title
         // sits nearer the traffic lights and carries less weight, so the window
         // opens on its contents rather than on its own name. Side by side the old
         // values put the title 8 pt lower and 2 pt larger.

@@ -39,7 +39,7 @@ cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
 
 # Explicit deployment target: keeps the binary runnable on macOS 13+ even when
 # built with a newer SDK (Liquid Glass APIs are weak-linked and runtime-gated).
-# -Osize rather than -O, as in Liteswitch: this app sits idle on a flagsChanged
+# -Osize rather than -O, as in Pullcord: this app sits idle on a flagsChanged
 # event tap, and the one thing that isn't idle — the HUD — animates on the render
 # server via CALayer rather than here. Size is worth more than the last few
 # percent of throughput. -Osize barely moves the binary on its own (315KB → 313KB)
