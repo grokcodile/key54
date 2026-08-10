@@ -81,8 +81,12 @@ jobs:
           mkdir -p dist/dmgroot
           cp -R "build/Key54.app" dist/dmgroot/
           ln -s /Applications dist/dmgroot/Applications
+          # -fs HFS+ is not cosmetic. Without it hdiutil now defaults to APFS,
+          # which lays an 11MB volume under 700KB of content and leaves its slack
+          # full of data that zlib then faithfully compresses — 44% of the
+          # published DMG was that. Same content on HFS+: 882KB → 496KB.
           hdiutil create -volname "Key54" -srcfolder dist/dmgroot \
-            -ov -format UDZO "dist/Key54.dmg"
+            -ov -fs "HFS+" -format UDZO "dist/Key54.dmg"
 
       - name: Notarize & staple DMG
         if: env.HAS_NOTARY == 'true'

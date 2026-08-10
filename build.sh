@@ -39,21 +39,40 @@ cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
 
 # Explicit deployment target: keeps the binary runnable on macOS 13+ even when
 # built with a newer SDK (Liquid Glass APIs are weak-linked and runtime-gated).
-swiftc -O main.swift \
+# -Osize rather than -O, as in Liteswitch: this app sits idle on a flagsChanged
+# event tap, and the one thing that isn't idle — the HUD — animates on the render
+# server via CALayer rather than here. Size is worth more than the last few
+# percent of throughput. -Osize barely moves the binary on its own (315KB → 313KB)
+# but it emits fewer specializations, so it strips 16KB smaller than -O does.
+swiftc -Osize main.swift \
     -target "$(uname -m)-apple-macos13.0" \
     -framework Cocoa \
     -framework ServiceManagement \
     -o "${BUILD_DIR}/Contents/MacOS/${APP_NAME}"
 
+# Local symbols are a third of the binary and nothing reads them at runtime —
+# Swift reflection uses its own metadata sections (__swift5_typeref, _fieldmd,
+# _reflstr, _proto), which strip -x leaves alone. Measured: 313KB down to 200KB.
+# Has to happen before codesign, or it breaks the signature.
+# (-x keeps global symbols; a full strip can break Swift binaries.)
+strip -x "${BUILD_DIR}/Contents/MacOS/${APP_NAME}"
+
 cp Info.plist "${BUILD_DIR}/Contents/Info.plist"
 
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "Signing with: ${SIGN_IDENTITY}"
+    # --options runtime is the hardened runtime, which notarization requires.
+    # --timestamp gets a trusted timestamp, so the signature outlives the cert.
     codesign --force --options runtime --timestamp \
         --entitlements Key54.entitlements \
         --sign "$SIGN_IDENTITY" "${BUILD_DIR}"
+    codesign --verify --strict --verbose=1 "${BUILD_DIR}"
 else
-    codesign --force --deep --sign - "${BUILD_DIR}"
+    echo "No Developer ID found — signing ad-hoc."
+    echo "  (macOS will forget this app's permissions on every rebuild.)"
+    # No --deep: Apple deprecated it for signing, and there is nothing nested
+    # in this bundle to descend into anyway.
+    codesign --force --sign - "${BUILD_DIR}"
 fi
 
 echo "Built ${BUILD_DIR}"

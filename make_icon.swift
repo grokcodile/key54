@@ -149,12 +149,18 @@ func write(_ master: CGImage, _ px: Int, to path: String) {
 let master = renderMaster(renderKeycap())
 
 try? FileManager.default.createDirectory(atPath: iconsetDir, withIntermediateDirectories: true)
+// No 1024px (512x512@2x) slice, matching Liteswitch. That one rendering is more
+// than half the .icns — 390KB with it, 172KB without — and the only things that
+// ask for it are the App Store and Finder's largest icon-view zoom. Key54 is an
+// LSUIElement agent with no Dock icon, so it never renders one that big in
+// normal use; at max zoom Finder scales the 512 slice up instead.
+// The master is still drawn at 1024 and downsampled, so nothing else changes.
 let sizes: [(Int, String)] = [
     (16, "icon_16x16.png"),    (32, "icon_16x16@2x.png"),
     (32, "icon_32x32.png"),    (64, "icon_32x32@2x.png"),
     (128, "icon_128x128.png"), (256, "icon_128x128@2x.png"),
     (256, "icon_256x256.png"), (512, "icon_256x256@2x.png"),
-    (512, "icon_512x512.png"), (1024, "icon_512x512@2x.png"),
+    (512, "icon_512x512.png"),
 ]
 for (px, name) in sizes { write(master, px, to: "\(iconsetDir)/\(name)") }
 
