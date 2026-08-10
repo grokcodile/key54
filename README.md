@@ -44,7 +44,7 @@ New versions arrive with `brew upgrade --cask key54`.
 
 ### Download the disk image
 
-1. Download the latest **[Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg)** (or browse [all releases](https://github.com/grokcodile/key54/releases)).
+1. Download the latest **[Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg)** — 250 KB — (or browse [all releases](https://github.com/grokcodile/key54/releases)).
 2. Open the `.dmg` and drag **Key54** into your `Applications` folder.
 
 The released build is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning. macOS may show a one-time "downloaded from the Internet" confirmation; just click **Open**.
