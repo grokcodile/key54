@@ -434,6 +434,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         axPollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.syncAccessibility()
         }
+        // This 1 Hz poll is the only continuous work a login item does all day, and
+        // a zero-tolerance timer demands its own precise wakeup every second.
+        // Tolerance lets the kernel coalesce it with whatever else is waking up —
+        // permission changes are a human-speed event, so half a second of slop
+        // costs nothing and the timer stops being a standing energy cost.
+        axPollTimer?.tolerance = 0.5
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(axPermissionChanged),
@@ -753,6 +759,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Re-check: if brew quietly did replace us, this corrects to upToDate.
             self.checkForUpdate()
         }
+        // A three-minute backstop doesn't care about ten seconds; let it coalesce.
+        // (The trigger path's buffer and hold timers deliberately get no tolerance —
+        // those are felt directly under the user's thumb.)
+        updateWatchdog?.tolerance = 10
     }
 
     private func brewPath() -> String? {
