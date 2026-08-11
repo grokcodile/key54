@@ -12,6 +12,9 @@ AppIcon.iconset/
 AppIcon.icns
 CLAUDE.md
 
+# Local agent/editor config — tooling for working on the app, not part of it
+.claude/
+
 # Apple signing / notarization keys — never commit
 # (base64 these into the GitHub Actions secrets instead)
 *.p8
