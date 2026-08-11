@@ -64,7 +64,6 @@ if [ -n "$SIGN_IDENTITY" ]; then
     # --options runtime is the hardened runtime, which notarization requires.
     # --timestamp gets a trusted timestamp, so the signature outlives the cert.
     codesign --force --options runtime --timestamp \
-        --entitlements Key54.entitlements \
         --sign "$SIGN_IDENTITY" "${BUILD_DIR}"
     codesign --verify --strict --verbose=1 "${BUILD_DIR}"
 else
