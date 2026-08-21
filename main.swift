@@ -132,17 +132,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Flip the master switch: (un)register the login item. The event tap stays
-    /// installed regardless; scheduleToggle() ignores the trigger while disabled.
+    /// Flip the master switch: (un)register the login item and install or
+    /// release the event tap to match, so "off" releases the key rather than
+    /// holding a tap it has decided to ignore.
     func setAppEnabled(_ on: Bool) {
         appEnabled = on
         if on {
             if SMAppService.mainApp.status != .enabled {
                 try? SMAppService.mainApp.register()
             }
+            // Switching on is the moment to ask, if we never have: the launch
+            // prompt is skipped while disabled, so this is the first time the
+            // permission is actually wanted.
+            if !AXIsProcessTrusted() { promptForAccessibility() }
         } else {
             try? SMAppService.mainApp.unregister()
         }
+        // Do it now rather than waiting up to a second for the poll to notice.
+        syncAccessibility()
     }
 
     /// Whether launchd auto-started us at login (vs. the user opening the app).
@@ -423,8 +430,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         syncAccessibility()
 
         // First launch without permission: let macOS ask, once. The poll below
-        // would otherwise re-prompt every second.
-        if !AXIsProcessTrusted() { promptForAccessibility() }
+        // would otherwise re-prompt every second. Switched off, there's nothing
+        // to ask for — the tap isn't installed either way, so demanding a
+        // permission the app has decided not to use is just a dialog to dismiss.
+        if appEnabled, !AXIsProcessTrusted() { promptForAccessibility() }
 
         // Poll for grant/revoke so the settings warning and the tap stay in sync.
         // A listen-only tap can't wedge input, so this is pure bookkeeping — and
@@ -448,12 +457,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    /// Reconcile state with the current Accessibility permission: build the tap
-    /// when granted (fresh, so it definitely receives events), drop it when
-    /// revoked, and refresh the settings warning when the state flips.
+    /// Reconcile state with the current Accessibility permission and the master
+    /// switch: build the tap when it's both permitted and wanted (fresh, so it
+    /// definitely receives events), drop it otherwise, and refresh the settings
+    /// warning when the permission flips.
+    ///
+    /// The `appEnabled` half matters as much as the permission half. Ignoring
+    /// the trigger while switched off left a disabled app still holding a tap
+    /// and watching every modifier keypress — harmless in practice, since it's
+    /// listen-only on `flagsChanged` and reads nothing, but "off" should mean
+    /// the app isn't watching, not that it watches and declines to act.
+    ///
+    /// This is also the *only* place the tap is installed, which is what makes
+    /// switching off actually stick: tearing the tap down anywhere else would
+    /// last under a second, because the poll calls this and would build it
+    /// straight back.
     private func syncAccessibility() {
         let trusted = AXIsProcessTrusted()
-        if trusted {
+        if trusted, appEnabled {
             if tap == nil { installTap() }
         } else {
             teardownTap()
