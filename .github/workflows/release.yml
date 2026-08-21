@@ -21,6 +21,23 @@ jobs:
       HAS_NOTARY: ${{ secrets.AC_API_KEY_ID != '' && secrets.AC_API_ISSUER_ID != '' && secrets.AC_API_KEY_BASE64 != '' }}
       HAS_TAP: ${{ secrets.TAP_PUSH_TOKEN != '' }}
     steps:
+      # A tagged release must be BOTH signed and notarized. The two flags are
+      # independent, and the dangerous combination is signing without notary:
+      # the build gets a Developer ID signature, both notarize steps skip
+      # silently, and the DMG publishes anyway — so every downloader meets
+      # "Apple could not verify Key54 is free of malware" and there is nothing
+      # in the workflow log saying why. Fail the release instead.
+      # (The reverse, notary without signing, already fails loudly at notarytool,
+      # which refuses an ad-hoc signature.)
+      - name: Require full signing config for a release
+        if: startsWith(github.ref, 'refs/tags/') && (env.HAS_SIGNING != 'true' || env.HAS_NOTARY != 'true')
+        run: |
+          echo "::error::A tagged release needs both signing and notarization secrets."
+          echo "HAS_SIGNING=${{ env.HAS_SIGNING }}  HAS_NOTARY=${{ env.HAS_NOTARY }}"
+          echo "Signing needs:  MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD"
+          echo "Notary needs:   AC_API_KEY_ID, AC_API_ISSUER_ID, AC_API_KEY_BASE64"
+          exit 1
+
       - uses: actions/checkout@v4
 
       - name: Install pngquant
