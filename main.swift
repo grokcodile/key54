@@ -522,15 +522,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Service the tap on a dedicated thread so app work (window rebuilds, the
         // app switch itself) can't delay the callback and time the tap out.
+        //
+        // .userInteractive because this thread *is* part of the input loop: it
+        // does nothing but wait on the tap's mach port, and by the time it wakes
+        // the user is already mid-keypress. At the default QoS the scheduler may
+        // let anything else on the machine run first — the same delay the
+        // dedicated thread exists to avoid, just sourced from the rest of the
+        // system instead of from us. Set before start(): quality of service is
+        // read when the thread is scheduled, so assigning it from inside the
+        // running block (as is often suggested) is both unsupported and too late.
+        //
+        // The semaphore closes a lifecycle hole, not a latency one. tapRunLoop is
+        // written here and read by teardownTap() on the main thread, so
+        // publishing it asynchronously was a data race — and worse, a leak: the
+        // 1 Hz syncAccessibility() poll can tear down within the window before
+        // the assignment lands, and a teardown that finds a nil run loop skips
+        // CFRunLoopStop() and strands this thread in CFRunLoopRun() forever,
+        // holding a source for an invalidated port. Waiting for setup to publish
+        // makes tapRunLoop non-nil whenever tap is, and orders the write ahead of
+        // every later read. It costs one thread spin-up on the install path, and
+        // nothing at all on the event path.
+        let ready = DispatchSemaphore(value: 0)
         let thread = Thread { [weak self] in
             let rl = CFRunLoopGetCurrent()
             self?.tapRunLoop = rl
             CFRunLoopAddSource(rl, source, .commonModes)
             CGEvent.tapEnable(tap: newTap, enable: true)
+            ready.signal()
             CFRunLoopRun()
         }
         thread.name = "com.ethan.key54.eventtap"
+        thread.qualityOfService = .userInteractive
         thread.start()
+        ready.wait()
     }
 
     /// Dispose of the tap and its dedicated thread. Safe to call when there's no
