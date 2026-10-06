@@ -5,7 +5,7 @@
 [![Latest release](https://img.shields.io/github/v/release/grokcodile/key54?sort=semver&label=release)](https://github.com/grokcodile/key54/releases/latest)
 [![Homebrew](https://img.shields.io/badge/Homebrew-grokcodile%2Ftap-C9782E?logo=homebrew&logoColor=white)](https://github.com/grokcodile/homebrew-tap)
 [![Downloads](https://img.shields.io/github/downloads/grokcodile/key54/total)](https://github.com/grokcodile/key54/releases)
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](#requirements)
+[![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/grokcodile/key54)](LICENSE)
 
 **Key54** is a tiny macOS utility that binds one app of your choice to the right Command key (keycode 54). Hold the right ⌘ to summon that app; hold it again to switch back to what you were doing. A built-in hold delay keeps quick taps and your normal right-⌘ shortcuts working as usual.
@@ -25,7 +25,7 @@ It runs as a background agent — no Dock icon, no menu bar item — and starts 
 - Hold right-⌘ to toggle one chosen app in and out of focus; hold again to return.
 - Works with any application.
 - **Hold Duration** presets (Instant / Short / Medium / Long / Custom) with a built-in Key Delay, so quick taps and normal right-⌘ shortcuts aren't hijacked.
-- A charge animation on a Liquid Glass bezel (macOS 26+; frosted glass on older systems), in two styles — **Power Up** and **Level Up** — following your System Settings accent color.
+- A charge animation on a Liquid Glass bezel, in two styles — **Power Up** and **Level Up** — following your System Settings accent color.
 - Correctly returns you to the previous app, including full-screen apps and apps with no open windows.
 - Runs silently as a background agent and starts at login.
 
@@ -49,7 +49,7 @@ New versions arrive with `brew upgrade --cask key54`.
 
 The released build is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning. macOS may show a one-time "downloaded from the Internet" confirmation; just click **Open**.
 
-> **Apple Silicon only.** The released `.dmg` is arm64; it won't run on Intel Macs — [build from source](#build-from-source) instead.
+> **Apple Silicon, macOS 26 or later.** The released `.dmg` is arm64 only.
 
 ### Updates
 
@@ -57,7 +57,7 @@ Key54 checks for new releases when it launches and every time you open its setti
 
 ### Build from source
 
-Works on any Mac (including Intel):
+Needs an Apple Silicon Mac on macOS 26 or later, with the matching command-line tools (`xcode-select --install`):
 
 ```sh
 bash install.sh
@@ -69,8 +69,7 @@ This compiles `main.swift`, generates the app icon (`make_icon.swift`), code-sig
 
 ## Requirements
 
-- macOS 13 or later.
-- **Apple Silicon** for the released `.dmg` (Intel Macs can [build from source](#build-from-source)).
+- **macOS 26 or later**, on an **Apple Silicon** Mac.
 - **Accessibility permission** (System Settings → Privacy & Security → Accessibility) so it can detect the right Command key.
 
 ## First run
@@ -110,21 +109,28 @@ Pick how the hold is visualized while it charges. It only affects the presets th
 
 ## Releases
 
-Releases are cut entirely by GitHub Actions (`.github/workflows/release.yml`).
-To publish a new version, push a version tag — that's the whole process:
+Releases are cut entirely by GitHub Actions (`.github/workflows/release.yml`) — nothing
+is notarized or published from a local machine. To publish a new version, push a
+version tag — that's the whole process:
 
 ```sh
 git tag v1.18
 git push origin main --tags
 ```
 
-The workflow then automatically:
+The workflow runs on GitHub's `macos-26` image and automatically:
 
-1. **Stamps the version from the tag** (`v1.18` → `1.18`) into `Info.plist`, so the app version can never drift from the release — you never edit the version by hand.
-2. **Builds and signs** the app (Developer ID, Hardened Runtime, secure timestamp).
-3. **Signs the `.dmg` too, then notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
-4. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Install](#install) download link points to.
-5. **Bumps the Homebrew cask** in [grokcodile/homebrew-tap](https://github.com/grokcodile/homebrew-tap) to the new version + sha256, so `brew upgrade --cask key54` sees it immediately.
+1. **Checks the secrets** are present and well-formed, so a blank or mistyped one fails in seconds rather than after the build.
+2. **Stamps the version from the tag** (`v1.18` → `1.18`) into `Info.plist`, so the app version can never drift from the release — you never edit the version by hand.
+3. **Builds and signs** the app (Developer ID, Hardened Runtime, secure timestamp).
+4. **Signs the `.dmg` too, then notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
+5. **Checks Gatekeeper accepts both** the app and the `.dmg` as Notarized Developer ID — the run fails before publishing otherwise.
+6. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Install](#install) download link points to.
+7. **Updates the Homebrew cask** in [grokcodile/homebrew-tap](https://github.com/grokcodile/homebrew-tap) — version, sha256 and `depends_on macos` — so `brew upgrade --cask key54` sees it immediately.
+
+**`Info.plist`'s `LSMinimumSystemVersion` is the one place the supported macOS is set.** `build.sh` compiles for it (always arm64), and the release writes the same version into the cask as Homebrew's name for it (26 → `:tahoe`) — so raising it is a one-line change, and the cask only follows once a release that needs it ships.
+
+The workflow is kept identical to Pullcord's apart from the app name (and Key54's pngquant step), so `diff` between the two shows only what really differs; change them together.
 
 **One-time setup.** Add these repository secrets (Settings → Secrets and
 variables → Actions). A tag push needs both the signing and the notary secrets
@@ -140,8 +146,9 @@ and fails without them; a manual run without them builds an ad-hoc dry-run
 | `AC_API_KEY_BASE64` | Base64 of the `AuthKey_XXXX.p8` |
 | `TAP_PUSH_TOKEN` | Fine-grained PAT with `contents: write` on `grokcodile/homebrew-tap` (for the cask bump; skipped if unset) |
 
-> Want a dry run? Trigger the workflow manually from the **Actions** tab — it
-> builds and notarizes but skips publishing (no tag, no release).
+> Want a dry run? Trigger the workflow manually from the **Actions** tab (or
+> `gh workflow run release.yml --ref main`) — it builds and notarizes but skips
+> publishing, and keeps the stapled `.dmg` as the `Key54-dry-run` artifact for 7 days.
 
 ## How it works
 

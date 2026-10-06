@@ -64,15 +64,18 @@ fi
 iconutil -c icns AppIcon.iconset -o AppIcon.icns
 cp "AppIcon.icns" "${BUILD_DIR}/Contents/Resources/AppIcon.icns"
 
-# Explicit deployment target: keeps the binary runnable on macOS 13+ even when
-# built with a newer SDK (Liquid Glass APIs are weak-linked and runtime-gated).
+# Info.plist's LSMinimumSystemVersion is the one place the supported macOS is set:
+# the deployment target is read from it here, and release.yml writes the same
+# value into the Homebrew cask's `depends_on macos`. Releases are Apple Silicon
+# only, so the architecture is pinned rather than taken from whatever Mac builds.
+MIN_MACOS="$(plutil -extract LSMinimumSystemVersion raw Info.plist)"
 # -Osize rather than -O, as in Pullcord: this app sits idle on a flagsChanged
 # event tap, and the one thing that isn't idle — the HUD — animates on the render
 # server via CALayer rather than here. Size is worth more than the last few
 # percent of throughput. -Osize barely moves the binary on its own (315KB → 313KB)
 # but it emits fewer specializations, so it strips 16KB smaller than -O does.
 swiftc -Osize main.swift \
-    -target "$(uname -m)-apple-macos13.0" \
+    -target "arm64-apple-macos${MIN_MACOS}" \
     -framework Cocoa \
     -framework ServiceManagement \
     -o "${BUILD_DIR}/Contents/MacOS/${APP_NAME}"
