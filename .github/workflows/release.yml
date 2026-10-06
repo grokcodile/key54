@@ -134,6 +134,17 @@ jobs:
             --wait
           xcrun stapler staple "dist/Key54.dmg"
 
+      # A manual run publishes nothing, so keep what it built: the signed,
+      # notarized, stapled DMG can then be checked (codesign / spctl / stapler)
+      # before a tag commits to a release.
+      - name: Keep dry-run DMG
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Key54-dry-run
+          path: dist/Key54.dmg
+          retention-days: 7
+
       # Only a tag push publishes; a manual run builds + notarizes as a dry-run.
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
