@@ -122,7 +122,7 @@ The workflow then automatically:
 
 1. **Stamps the version from the tag** (`v1.18` → `1.18`) into `Info.plist`, so the app version can never drift from the release — you never edit the version by hand.
 2. **Builds and signs** the app (Developer ID, Hardened Runtime, secure timestamp).
-3. **Notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
+3. **Signs the `.dmg` too, then notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
 4. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Install](#install) download link points to.
 5. **Bumps the Homebrew cask** in [grokcodile/homebrew-tap](https://github.com/grokcodile/homebrew-tap) to the new version + sha256, so `brew upgrade --cask key54` sees it immediately.
 
