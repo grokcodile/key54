@@ -47,25 +47,27 @@ New versions arrive with `brew upgrade --cask key54`.
 1. Download the latest **[Key54.dmg](https://github.com/grokcodile/key54/releases/latest/download/Key54.dmg)** (or browse [all releases](https://github.com/grokcodile/key54/releases)).
 2. Open the `.dmg` and drag **Key54** into your `Applications` folder.
 
-The released build is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning. macOS may show a one-time "downloaded from the Internet" confirmation; just click **Open**.
+Key54 is signed and notarized by Apple, so it opens normally — no "unidentified developer" warning. macOS may show a one-time "downloaded from the Internet" confirmation; just click **Open**.
 
-> **Apple Silicon, macOS 26 or later.** The released `.dmg` is arm64 only.
+> **Apple Silicon, macOS 26 or later.**
 
 ### Updates
 
-Key54 checks for new releases when it launches and every time you open its settings — so the window always shows current status. It never polls in the background: an update notice can't interrupt you mid-session, because the only time one appears is when you've opened the window yourself. When an update is available, a notice appears with an **Update** button: Homebrew installs upgrade through `brew` and reopen on the new version by themselves; DMG installs download and open the new disk image so you can drag it across.
+Key54 checks for a new release when you open it and each time you open its settings. It never checks in the background while you work: when it starts at login it checks once, and shows its window only if there's an update waiting.
+
+When one is available, an **Update** button appears in the settings window. A Homebrew install upgrades and reopens on the new version by itself. A disk-image install downloads the new `.dmg`, opens it, and quits so you can drag the new version over the old one.
+
+That update check is the only network request Key54 makes — see [PRIVACY.md](PRIVACY.md).
 
 ### Build from source
 
-Needs an Apple Silicon Mac on macOS 26 or later, with the matching command-line tools (`xcode-select --install`):
+On an Apple Silicon Mac with macOS 26 and Apple's command-line tools (`xcode-select --install`):
 
 ```sh
 bash install.sh
 ```
 
-This compiles `main.swift`, generates the app icon (`make_icon.swift`), code-signs, installs to `/Applications/Key54.app`, and launches it. Signing uses the identity in `SIGN_IDENTITY` (a certificate SHA-1 hash, defaulting to the maintainer's — run with `SIGN_IDENTITY=<your cert hash>` to use your own), falling back to an ad-hoc signature if the default isn't in your keychain. An ad-hoc build isn't notarized, so its first launch shows the "unidentified developer" warning — clear it once by right-clicking **Key54 → Open** — and because an ad-hoc signature has no stable identity, macOS re-asks for Accessibility after every reinstall.
-
-> Optional: install [`pngquant`](https://pngquant.org) to shrink the generated icon.
+This builds Key54, installs it to `/Applications` and launches it.
 
 ## Requirements
 
@@ -107,62 +109,21 @@ Pick how the hold is visualized while it charges. It only affects the presets th
 2. Drag **Key54** from `Applications` to the Trash.
 3. Optionally remove its entry under System Settings → Privacy & Security → Accessibility.
 
-## Releases
-
-Releases are cut entirely by GitHub Actions (`.github/workflows/release.yml`) — nothing
-is notarized or published from a local machine. To publish a new version, push a
-version tag — that's the whole process:
-
-```sh
-git tag v1.18
-git push origin main --tags
-```
-
-The workflow runs on GitHub's `macos-26` image and automatically:
-
-1. **Checks the secrets** are present and well-formed, so a blank or mistyped one fails in seconds rather than after the build.
-2. **Stamps the version from the tag** (`v1.18` → `1.18`) into `Info.plist`, so the app version can never drift from the release — you never edit the version by hand.
-3. **Builds and signs** the app (Developer ID, Hardened Runtime, secure timestamp).
-4. **Signs the `.dmg` too, then notarizes and staples both the app and the `.dmg`**, so a copy dragged out of the DMG launches cleanly even offline.
-5. **Checks Gatekeeper accepts both** the app and the `.dmg` as Notarized Developer ID — the run fails before publishing otherwise.
-6. **Publishes `Key54.dmg`** to the matching GitHub Release — exactly what the [Install](#install) download link points to.
-7. **Updates the Homebrew cask** in [grokcodile/homebrew-tap](https://github.com/grokcodile/homebrew-tap) — version, sha256 and `depends_on macos` — so `brew upgrade --cask key54` sees it immediately.
-
-**`Info.plist`'s `LSMinimumSystemVersion` is the one place the supported macOS is set.** `build.sh` compiles for it (always arm64), and the release writes the same version into the cask as Homebrew's name for it (26 → `:tahoe`) — so raising it is a one-line change, and the cask only follows once a release that needs it ships.
-
-The workflow is kept identical to Pullcord's apart from the app name (and Key54's pngquant step), so `diff` between the two shows only what really differs; change them together.
-
-**One-time setup.** Add these repository secrets (Settings → Secrets and
-variables → Actions). A tag push needs both the signing and the notary secrets
-and fails without them; a manual run without them builds an ad-hoc dry-run
-`.dmg` that triggers a Gatekeeper warning:
-
-| Secret | Purpose |
-| --- | --- |
-| `MACOS_CERT_P12_BASE64` | Base64 of your exported **Developer ID Application** cert and private key (`.p12`). It must contain the identity whose SHA-1 is pinned in `release.yml` (and `build.sh`) — the release fails otherwise. Export that specific cert: a keychain can hold several with the same name |
-| `MACOS_CERT_PASSWORD` | Password for that `.p12` |
-| `AC_API_KEY_ID` | App Store Connect API **Key ID** |
-| `AC_API_ISSUER_ID` | App Store Connect API **Issuer ID** |
-| `AC_API_KEY_BASE64` | Base64 of the `AuthKey_XXXX.p8` |
-| `TAP_PUSH_TOKEN` | Fine-grained PAT with `contents: write` on `grokcodile/homebrew-tap` (for the cask bump; skipped if unset) |
-
-> Want a dry run? Trigger the workflow manually from the **Actions** tab (or
-> `gh workflow run release.yml --ref main`) — it builds and notarizes but skips
-> publishing, and keeps the stapled `.dmg` as the `Key54-dry-run` artifact for 7 days.
+Installed with Homebrew, steps 1 and 2 are `brew uninstall --cask key54`; add `--zap` to remove its preferences too.
 
 ## How it works
 
-Key54 watches `flagsChanged` events for the right Command key (keycode 54) with a **listen-only** session `CGEventTap`, serviced on a dedicated thread. Listen-only means the tap only ever *observes* events — the system never waits on it, so it can't block, delay, or drop input (even if Accessibility is revoked while running). A session-level tap also keeps seeing keys during Space switches and full-screen transitions, so the trigger fires reliably no matter which app or Space is up. A sustained hold past the configured duration toggles the chosen app via `NSWorkspace`; full-screen and window-state edge cases are handled with the Accessibility API.
+Key54 watches for the right Command key with a **listen-only** event tap. It only observes key events — it never intercepts, delays or changes them — so your typing and shortcuts pass straight through, even if Accessibility is switched off while it's running. It keeps seeing the key during Space switches and full-screen transitions, so the trigger works whichever app or Space is in front.
+
+When you hold past your Hold Duration, Key54 brings your chosen app forward, or returns you to the app you were in. Full-screen apps and apps with no open windows are handled through the Accessibility API, so you land back exactly where you were.
 
 ## The name
 
-**54** is the macOS keycode for the right Command key — the exact key this app
-claims. (You can see it in the source: the event tap watches for `keycode 54`.)
-So **Key54** is literally that — the key, named by its number.
+**54** is the macOS keycode for the right Command key — the exact key this app claims. So **Key54** is literally that: the key, named by its number.
 
-## Notes
+## Why it isn't on the Mac App Store
 
-This app uses a global event tap and controls other applications, which is incompatible with the Mac App Store sandbox — it's distributed directly (Developer ID + notarization, or built from source).
+Key54 watches the keyboard and switches between other apps, which the App Store's sandbox doesn't allow. It's distributed directly instead — signed and notarized by Apple.
 
 ## License
 
