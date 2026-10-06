@@ -683,18 +683,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+            // Only a release that actually carries the DMG counts. CI publishes the
+            // release a moment before its upload lands, and both update paths (the
+            // download and the Homebrew cask) fetch that file — offering a release
+            // without it would send the Update button straight at a 404.
+            let dmgName = URL(string: self.dmgURL)?.lastPathComponent
+            let assets = json["assets"] as? [[String: Any]] ?? []
+            let installable = assets.contains { $0["name"] as? String == dmgName }
             await MainActor.run {
-                self.handleLatest(latest)
+                self.handleLatest(latest, installable: installable)
                 completion?(true)
             }
         }
     }
 
-    private func handleLatest(_ latest: String) {
+    private func handleLatest(_ latest: String, installable: Bool) {
         // Never interrupt an update already in flight.
         guard updateState != .updating, updateState != .downloading else { return }
         let newState: UpdateState =
-            AppDelegate.isVersion(latest, newerThan: appVersion) ? .available : .upToDate
+            installable && AppDelegate.isVersion(latest, newerThan: appVersion) ? .available : .upToDate
         let newLatest = newState == .available ? latest : nil
         // Only touch the window on a real transition — refreshFooter rebuilds and
         // recenters it, which must not happen on a routine "no news" check.
@@ -828,7 +835,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .appendingPathComponent("Downloads/Key54.dmg")
         Task { [weak self] in
             do {
-                let (tmp, _) = try await URLSession.shared.download(from: url)
+                let (tmp, response) = try await URLSession.shared.download(from: url)
+                // download(from:) doesn't throw on an HTTP error: a missing asset
+                // arrives as GitHub's 404 page, which must not replace the user's
+                // ~/Downloads/Key54.dmg, get "mounted", or quit us.
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                    try? FileManager.default.removeItem(at: tmp)
+                    throw URLError(.fileDoesNotExist)
+                }
                 // Claim the temp file here, in the same context — it isn't
                 // guaranteed to survive an actor hop.
                 try? FileManager.default.removeItem(at: dest)
@@ -841,10 +855,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
             } catch {
-                // Couldn't download — hand the URL to the browser and stay open.
+                // Couldn't download — hand it to the browser and stay open. If GitHub
+                // answered without the file, the release page beats a link that
+                // would only 404 again there.
                 guard let self else { return }
+                let fallback = (error as? URLError)?.code == .fileDoesNotExist
+                    ? URL(string: "https://github.com/grokcodile/key54/releases/latest") ?? url
+                    : url
                 await MainActor.run {
-                    NSWorkspace.shared.open(url)
+                    NSWorkspace.shared.open(fallback)
                     self.updateState = .available
                     self.settingsWindow?.refreshFooter()
                 }
