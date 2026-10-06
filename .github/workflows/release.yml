@@ -48,6 +48,13 @@ jobs:
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          # Sign by SHA-1 hash, never by name — several identities can share one
+          # name, and the old `grep | head -1` took the first, which may be the
+          # older cert Apple is retiring. Exported below as an explicit
+          # SIGN_IDENTITY, so build.sh fails (not ad-hoc) if it can't use it and
+          # then proves the signer's fingerprint. Same hash as
+          # DEFAULT_SIGN_IDENTITY in build.sh.
+          SIGN_IDENTITY: DEA1A3749B06CF3619F72152EFC35A48E380C4E4
         run: |
           KEYCHAIN="$RUNNER_TEMP/app.keychain-db"
           security create-keychain -p "" "$KEYCHAIN"
@@ -57,9 +64,16 @@ jobs:
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN" >/dev/null
-          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
-          echo "Using identity: $IDENTITY"
-          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          # Fail the release rather than sign with whatever else the .p12 holds.
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -qF "$SIGN_IDENTITY"; then
+            echo "::error::The imported .p12 has no valid signing identity with hash $SIGN_IDENTITY."
+            echo "Re-export that Developer ID Application cert and update MACOS_CERT_P12_BASE64 / MACOS_CERT_PASSWORD."
+            echo "Identities that were imported:"
+            security find-identity -v -p codesigning "$KEYCHAIN"
+            exit 1
+          fi
+          echo "Using identity: $SIGN_IDENTITY"
+          echo "SIGN_IDENTITY=$SIGN_IDENTITY" >> "$GITHUB_ENV"
 
       # The git tag is the single source of truth for the version: stamp it into
       # Info.plist before building so the app version can never drift from the

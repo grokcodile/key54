@@ -1,13 +1,19 @@
 #!/bin/bash
 # Builds Key54.app into ./build. Used by both install.sh and CI.
 #
-# Code-signing: set SIGN_IDENTITY to a "Developer ID Application: …" identity to
-# force one; otherwise the first Developer ID in the keychain is used, and only a
-# machine without one falls back to ad-hoc.
+# Code-signing: SIGN_IDENTITY picks the identity and must be a certificate's SHA-1
+# hash (40 hex digits). It defaults to the Developer ID Application cert for team
+# 8UP5SFXY56 (G2 Sub-CA, expires 2031-09-16). Sign by hash, never by name: the
+# keychain can hold several identities with the identical name — the older cert
+# Apple is retiring is still there — so a name is ambiguous (codesign refuses to
+# choose, and the old `grep | head -1` quietly took the first, older one). An
+# identity you set explicitly that isn't usable is an error, even if it's the same
+# hash as the default; only the *default* missing (a machine that never had this
+# cert) falls back to ad-hoc.
 #
 # The fallback matters for more than distribution. macOS keys the Accessibility
 # grant to the app's designated requirement — with a Developer ID that's the
-# stable "identifier + team certificate", but an ad-hoc signature has no cert, so
+# stable "identifier + team OU", but an ad-hoc signature has no cert, so
 # it reduces to the binary's cdhash. That changes on *every* build, so each
 # reinstall looks like a brand-new app and has to be re-granted Accessibility.
 set -e
@@ -16,8 +22,29 @@ cd "$(dirname "$0")"
 
 APP_NAME="Key54"
 BUILD_DIR="./build/${APP_NAME}.app"
-SIGN_IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
-    | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')}"
+# Mirrored by the pinned hash in .github/workflows/release.yml.
+DEFAULT_SIGN_IDENTITY="DEA1A3749B06CF3619F72152EFC35A48E380C4E4"
+# Remember whether the caller chose the identity (empty counts as unset): one that
+# was chosen and can't be used must fail rather than fall back to ad-hoc — CI
+# exports exactly the default hash, so comparing against the default can't tell.
+SIGN_IDENTITY_EXPLICIT="${SIGN_IDENTITY:+1}"
+SIGN_IDENTITY="${SIGN_IDENTITY:-$DEFAULT_SIGN_IDENTITY}"
+if ! printf '%s' "$SIGN_IDENTITY" | grep -Eq '^[0-9A-Fa-f]{40}$'; then
+    echo "error: SIGN_IDENTITY must be a certificate SHA-1 hash (40 hex digits), not a name." >&2
+    exit 1
+fi
+# `find-identity -v` lists only *valid* identities, so a cert that is expired,
+# untrusted or missing its private key is absent here too — "not found" below
+# means "not usable", not necessarily "not installed".
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -qiE "^ *[0-9]+\) ${SIGN_IDENTITY} "; then
+    if [ -n "$SIGN_IDENTITY_EXPLICIT" ]; then
+        echo "error: SIGN_IDENTITY=${SIGN_IDENTITY} is not among the valid code-signing identities" >&2
+        echo "       (missing, expired, untrusted, or no private key)." >&2
+        exit 1
+    fi
+    SIGN_IDENTITY=""
+fi
+BUILD_ABS="$PWD/${BUILD_DIR#./}"
 
 echo "Building ${APP_NAME}..."
 
@@ -66,8 +93,20 @@ if [ -n "$SIGN_IDENTITY" ]; then
     codesign --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" "${BUILD_DIR}"
     codesign --verify --strict --verbose=1 "${BUILD_DIR}"
+    # Prove who signed it. `codesign -dvv` can't: the old and new certs share a
+    # name and team and it prints no hash, so a signature from the wrong one reads
+    # identically. The signing certificate's own fingerprint is unambiguous.
+    CERT_DIR="$(mktemp -d)"
+    ( cd "$CERT_DIR" && codesign -d --extract-certificates "$BUILD_ABS" 2>/dev/null )
+    SIGNED_BY="$(openssl x509 -inform DER -in "$CERT_DIR/codesign0" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')"
+    rm -rf "${CERT_DIR:?}"
+    if [ "$(printf '%s' "$SIGNED_BY" | tr a-f A-F)" != "$(printf '%s' "$SIGN_IDENTITY" | tr a-f A-F)" ]; then
+        echo "error: signed by certificate ${SIGNED_BY}, expected ${SIGN_IDENTITY}." >&2
+        exit 1
+    fi
+    echo "Signed by certificate ${SIGNED_BY}"
 else
-    echo "No Developer ID found — signing ad-hoc."
+    echo "Signing identity ${DEFAULT_SIGN_IDENTITY} not among the valid identities — signing ad-hoc."
     echo "  (macOS will forget this app's permissions on every rebuild.)"
     # No --deep: Apple deprecated it for signing, and there is nothing nested
     # in this bundle to descend into anyway.

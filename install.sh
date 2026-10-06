@@ -8,7 +8,8 @@ APP_NAME="Key54"
 APP_DIR="/Applications/${APP_NAME}.app"
 BUILD_DIR="./build/${APP_NAME}.app"
 
-# Build (ad-hoc signed unless SIGN_IDENTITY is set in the environment).
+# Build (signed with SIGN_IDENTITY, a cert hash defaulting to build.sh's; ad-hoc
+# if that default identity isn't in the keychain).
 bash build.sh
 
 echo "Installing to ${APP_DIR}..."

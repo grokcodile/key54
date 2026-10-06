@@ -63,7 +63,7 @@ Works on any Mac (including Intel):
 bash install.sh
 ```
 
-This compiles `main.swift`, generates the app icon (`make_icon.swift`), code-signs, installs to `/Applications/Key54.app`, and launches it. Signing uses the first "Developer ID Application" identity in your keychain, falling back to an ad-hoc signature if there isn't one. An ad-hoc build isn't notarized, so its first launch shows the "unidentified developer" warning — clear it once by right-clicking **Key54 → Open** — and because an ad-hoc signature has no stable identity, macOS re-asks for Accessibility after every reinstall.
+This compiles `main.swift`, generates the app icon (`make_icon.swift`), code-signs, installs to `/Applications/Key54.app`, and launches it. Signing uses the identity in `SIGN_IDENTITY` (a certificate SHA-1 hash, defaulting to the maintainer's — run with `SIGN_IDENTITY=<your cert hash>` to use your own), falling back to an ad-hoc signature if the default isn't in your keychain. An ad-hoc build isn't notarized, so its first launch shows the "unidentified developer" warning — clear it once by right-clicking **Key54 → Open** — and because an ad-hoc signature has no stable identity, macOS re-asks for Accessibility after every reinstall.
 
 > Optional: install [`pngquant`](https://pngquant.org) to shrink the generated icon.
 
@@ -127,13 +127,13 @@ The workflow then automatically:
 5. **Bumps the Homebrew cask** in [grokcodile/homebrew-tap](https://github.com/grokcodile/homebrew-tap) to the new version + sha256, so `brew upgrade --cask key54` sees it immediately.
 
 **One-time setup.** Add these repository secrets (Settings → Secrets and
-variables → Actions). With the signing + notary secrets set, the workflow signs
-and notarizes; without them it falls back to an ad-hoc `.dmg` that triggers a
-Gatekeeper warning — so set them before any public release:
+variables → Actions). A tag push needs both the signing and the notary secrets
+and fails without them; a manual run without them builds an ad-hoc dry-run
+`.dmg` that triggers a Gatekeeper warning:
 
 | Secret | Purpose |
 | --- | --- |
-| `MACOS_CERT_P12_BASE64` | Base64 of your exported **Developer ID Application** cert (`.p12`) |
+| `MACOS_CERT_P12_BASE64` | Base64 of your exported **Developer ID Application** cert and private key (`.p12`). It must contain the identity whose SHA-1 is pinned in `release.yml` (and `build.sh`) — the release fails otherwise. Export that specific cert: a keychain can hold several with the same name |
 | `MACOS_CERT_PASSWORD` | Password for that `.p12` |
 | `AC_API_KEY_ID` | App Store Connect API **Key ID** |
 | `AC_API_ISSUER_ID` | App Store Connect API **Issuer ID** |
