@@ -305,14 +305,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Bring `app` forward, transferring focus from the app we're leaving. The
-    /// macOS 14 cooperative form is the one that behaves like ⌘Tab — including
+    /// cooperative `activate(from:)` is the one that behaves like ⌘Tab — including
     /// stepping out of a full-screen Space when the destination has no windows,
     /// which a plain `activate()` won't reliably do. Falls back to the plain form
     /// if that's refused; both are window-neutral, which is the point.
     private func bringForward(_ app: NSRunningApplication, from: NSRunningApplication) {
-        if #available(macOS 14.0, *) {
-            if app.activate(from: from, options: []) { return }
-        }
+        if app.activate(from: from, options: []) { return }
         _ = app.activate(options: [])
     }
 
@@ -1967,8 +1965,8 @@ class SettingsWindow: NSWindow {
 /// A transparent, click-through overlay that shows a glowing ⌘ "charging" ring
 /// while the right Command key is held, then a burst when it triggers. Floats
 /// above everything (including full-screen Spaces) without stealing focus.
-/// The ring + icon sit on a Liquid Glass slab (macOS 26+) so the HUD reads
-/// like a system bezel; older systems get the classic frosted HUD material.
+/// The ring + icon sit on a Liquid Glass slab so the HUD reads like a system
+/// bezel.
 final class TriggerHUD {
     /// How the hold is visualized. `.powerUp` is the classic accent ring sweep;
     /// `.levelUp` fills the glass slab like a glass of water. Chosen in settings
@@ -2387,7 +2385,9 @@ final class TriggerHUD {
         // firing swell) sits comfortably inside it.
         puckRestFrame = NSRect(x: (size - puckSize) / 2, y: (size - puckSize) / 2,
                                width: puckSize, height: puckSize)
-        puckView = Self.glassBackdrop(frame: puckRestFrame, cornerRadius: 36)
+        let glass = NSGlassEffectView(frame: puckRestFrame)
+        glass.cornerRadius = 36
+        puckView = glass
         v.addSubview(puckView)
 
         // The animated ring/icon layers live in their own view above the glass.
@@ -2400,38 +2400,6 @@ final class TriggerHUD {
 
         p.contentView = v
         return p
-    }
-
-    /// A Liquid Glass backdrop on macOS 26+, falling back to the classic
-    /// frosted HUD material on older systems (or older build toolchains).
-    private static func glassBackdrop(frame: NSRect, cornerRadius: CGFloat) -> NSView {
-        #if compiler(>=6.2)
-        if #available(macOS 26.0, *) {
-            let g = NSGlassEffectView(frame: frame)
-            g.cornerRadius = cornerRadius
-            return g
-        }
-        #endif
-        let v = NSVisualEffectView(frame: frame)
-        v.material = .hudWindow
-        v.blendingMode = .behindWindow
-        v.state = .active
-        v.maskImage = roundedMask(cornerRadius: cornerRadius)
-        return v
-    }
-
-    /// Stretchable rounded-rect mask — NSVisualEffectView needs this (rather
-    /// than a layer cornerRadius) so the blur itself is clipped to the shape.
-    private static func roundedMask(cornerRadius r: CGFloat) -> NSImage {
-        let edge = r * 2 + 1
-        let img = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
-            return true
-        }
-        img.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
-        img.resizingMode = .stretch
-        return img
     }
 
     private func buildLayers(in root: CALayer) {
